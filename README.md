@@ -1,7 +1,5 @@
 # Implementing Basic Forwarding
 
-add origin - test
-
 ## Introduction
 
 The objective of this exercise is to write a P4 program that
