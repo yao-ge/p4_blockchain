@@ -33,13 +33,26 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
+header payload_t{
+	bit<8> data;
+}
+
+struct block_metadata_t {
+	bit<256>  pre_header_hash;
+	bit<256>  data_hash;
+	bit<32>   timestamp;
+	bit<32>   nonce;
+	bit<276>  data;
+}
+
 struct metadata {
-    /* empty */
+	block_metadata_t  block_metadata;
 }
 
 struct headers {
     ethernet_t   ethernet;
     ipv4_t       ipv4;
+	payload_t    payload;
 }
 
 /*************************************************************************
@@ -96,35 +109,60 @@ control MyIngress(inout headers hdr,
         hdr.ethernet.dstAddr = dstAddr;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
-    
-    table ipv4_lpm {
-        key = {
-            hdr.ipv4.dstAddr: lpm;
-        }
-        actions = {
-            ipv4_forward;
-            drop;
-            NoAction;
-        }
-        size = 1024;
-        default_action = drop();
-    }
-    
-    apply {
-        if (hdr.ipv4.isValid()) {
-            ipv4_lpm.apply();
-        }
 
+	action polling_packet(){
 		if(standard_metadata.ingress_port == 1){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 1;
 			standard_metadata.egress_port = 2;
 			standard_metadata.egress_spec = 2;
 		}else if(standard_metadata.ingress_port == 2){
-			standard_metadata.egress_port = 3;
-			standard_metadata.egress_spec = 3;
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 2;
 		}else if(standard_metadata.ingress_port == 3){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 3;
+			standard_metadata.egress_port = 4;
+			standard_metadata.egress_spec = 4;
+		}else if(standard_metadata.ingress_port == 4){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 4;
+		}else if(standard_metadata.ingress_port == 5){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 5;
 			standard_metadata.egress_port = 1;
 			standard_metadata.egress_spec = 1;
 		}
+	}
+
+	action read_request(){
+		hdr.ipv4.ttl = hdr.ipv4.ttl;
+	}
+
+	action write_request(){
+		hdr.ipv4.ttl = hdr.ipv4.ttl;
+	}
+
+	action sync_request(){
+		hdr.ipv4.ttl = hdr.ipv4.ttl;
+	}
+
+	table payload_lpm {
+		key = {
+			hdr.payload.data: lpm;
+		}
+		actions = {
+			read_request;
+			write_request;
+			sync_request;
+			drop;
+			NoAction;
+		}
+		size = 1024;
+		default_action = drop();
+	}
+    
+    apply {
+
+		if(hdr.payload.isValid()){
+			payload_lpm.apply();
+		}
+		polling_packet();
     }
 }
 
@@ -147,7 +185,7 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
 	update_checksum(
 	    hdr.ipv4.isValid(),
             { hdr.ipv4.version,
-	      hdr.ipv4.ihl,
+			  hdr.ipv4.ihl,
               hdr.ipv4.diffserv,
               hdr.ipv4.totalLen,
               hdr.ipv4.identification,

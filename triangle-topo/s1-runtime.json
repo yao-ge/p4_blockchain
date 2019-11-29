@@ -3,44 +3,35 @@
   "p4info": "build/basic.p4.p4info.txt",
   "bmv2_json": "build/basic.json",
   "table_entries": [
-    {
-      "table": "MyIngress.ipv4_lpm",
-      "default_action": true,
-      "action_name": "MyIngress.drop",
-      "action_params": { }
-    },
-    {
-      "table": "MyIngress.ipv4_lpm",
-      "match": {
-        "hdr.ipv4.dstAddr": ["10.0.1.1", 32]
-      },
-      "action_name": "MyIngress.ipv4_forward",
-      "action_params": {
-        "dstAddr": "08:00:00:00:01:11",
-        "port": 1
-      }
-    },
-    {
-      "table": "MyIngress.ipv4_lpm",
-      "match": {
-        "hdr.ipv4.dstAddr": ["10.0.2.2", 32]
-      },
-      "action_name": "MyIngress.ipv4_forward",
-      "action_params": {
-        "dstAddr": "08:00:00:00:02:00",
-        "port": 2
-      }
-    },
-    {
-      "table": "MyIngress.ipv4_lpm",
-      "match": {
-        "hdr.ipv4.dstAddr": ["10.0.3.3", 32]
-      },
-      "action_name": "MyIngress.ipv4_forward",
-      "action_params": {
-        "dstAddr": "08:00:00:00:03:00",
-        "port": 3
-      }
-    }
+	  {
+		  "table": "MyIngress.payload_lpm",
+		  "default_action": true,
+		  "action_name": "MyIngress.drop",
+		  "action_params": {}
+	  },
+	  {
+		  "table": "MyIngress.payload_lpm",
+		  "match": {
+			  "hdr.payload.data": ["r", 8]
+		  },
+		  "action_name": "MyIngress.read_request",
+		  "action_params": {}
+	  },
+	  {
+		  "table": "MyIngress.payload_lpm",
+		  "match": {
+			  "hdr.payload.data": ["w", 8]
+		  },
+		  "action_name": "MyIngress.write_request",
+		  "action_params": {}
+	  },
+	  {
+		  "table": "MyIngress.payload_lpm",
+		  "match": {
+			  "hdr.payload.data": ["s", 8]
+		  },
+		  "action_name": "MyIngress.sync_request",
+		  "action_params": {}
+	  }
   ]
 }

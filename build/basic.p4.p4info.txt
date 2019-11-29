@@ -1,0 +1,76 @@
+pkg_info {
+  arch: "v1model"
+}
+tables {
+  preamble {
+    id: 33590776
+    name: "MyIngress.payload_lpm"
+    alias: "payload_lpm"
+  }
+  match_fields {
+    id: 1
+    name: "hdr.payload.data"
+    bitwidth: 8
+    match_type: LPM
+  }
+  action_refs {
+    id: 16791562
+  }
+  action_refs {
+    id: 16788239
+  }
+  action_refs {
+    id: 16778955
+  }
+  action_refs {
+    id: 16805608
+  }
+  action_refs {
+    id: 16800567
+  }
+  size: 1024
+}
+actions {
+  preamble {
+    id: 16800567
+    name: "NoAction"
+    alias: "NoAction"
+  }
+}
+actions {
+  preamble {
+    id: 16805608
+    name: "MyIngress.drop"
+    alias: "drop"
+  }
+}
+actions {
+  preamble {
+    id: 16824508
+    name: "MyIngress.polling_packet"
+    alias: "polling_packet"
+  }
+}
+actions {
+  preamble {
+    id: 16791562
+    name: "MyIngress.read_request"
+    alias: "read_request"
+  }
+}
+actions {
+  preamble {
+    id: 16788239
+    name: "MyIngress.write_request"
+    alias: "write_request"
+  }
+}
+actions {
+  preamble {
+    id: 16778955
+    name: "MyIngress.sync_request"
+    alias: "sync_request"
+  }
+}
+type_info {
+}
