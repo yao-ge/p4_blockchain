@@ -23,7 +23,7 @@ def get_if():
 
 def main():
 
-    if len(sys.argv)<2:
+    if len(sys.argv)<3:
         print 'pass 2 arguments: <destination> "<message>"'
         exit(1)
 
@@ -32,10 +32,7 @@ def main():
 
     print "sending on interface %s to %s" % (iface, str(addr))
     pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
-    pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / sys.argv[2]
-    #pk_string = '\x00\x00\xFF\xFF\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x6F\x14\x01\x01\x01'
-    #pk_string = '\x00\x00\x00\x00\x6F\x14'
-    #pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / pk_string
+    pkt = pkt /IP(dst=addr) / TCP(dport=1234, sport=random.randint(49152,65535)) / sys.argv[2]
     pkt.show2()
     hexdump(pkt)
     sendp(pkt, iface=iface, verbose=False)

@@ -8,6 +8,14 @@ const bit<16> TYPE_IPV4 = 0x800;
 *********************** H E A D E R S  ***********************************
 *************************************************************************/
 
+
+#define READ_REQUEST_L  0x72
+#define READ_REQUEST_U  0x52
+#define WRITE_REQUEST_L 0x77
+#define WRITE_REQUEST_U 0x57
+#define SYNC_REQUEST_L  0x73
+#define SYNC_REQUEST_U  0x53
+
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
 typedef bit<32> ip4Addr_t;
@@ -33,26 +41,32 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
-header payload_t{
-	bit<8> data;
+header udp_t {
+    bit<16>   sport;
+    bit<16>   dport;
+    bit<16>   length;
+    bit<16>   checksum;
+    bit<8>  payload;
 }
+
 
 struct block_metadata_t {
 	bit<256>  pre_header_hash;
 	bit<256>  data_hash;
 	bit<32>   timestamp;
 	bit<32>   nonce;
-	bit<276>  data;
+	bit<8>  data;
 }
 
 struct metadata {
-	block_metadata_t  block_metadata;
+	/* empty */
+	block_metadata_t block_metadata;
 }
 
 struct headers {
     ethernet_t   ethernet;
     ipv4_t       ipv4;
-	payload_t    payload;
+	udp_t        udp;
 }
 
 /*************************************************************************
@@ -78,8 +92,13 @@ parser MyParser(packet_in packet,
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
-        transition accept;
+        transition parse_udp;
     }
+
+	state parse_udp {
+		packet.extract(hdr.udp);
+		transition accept;
+	}
 
 }
 
@@ -128,41 +147,35 @@ control MyIngress(inout headers hdr,
 			standard_metadata.egress_port = 1;
 			standard_metadata.egress_spec = 1;
 		}
+
 	}
 
-	action read_request(){
-		hdr.ipv4.ttl = hdr.ipv4.ttl;
+	action read_request_from_user(){
 	}
 
-	action write_request(){
-		hdr.ipv4.ttl = hdr.ipv4.ttl;
+	action write_request_from_user(){
 	}
 
-	action sync_request(){
-		hdr.ipv4.ttl = hdr.ipv4.ttl;
+	action sync_request_from_new_node(){
 	}
 
-	table payload_lpm {
-		key = {
-			hdr.payload.data: lpm;
+	action change_payload() {
+		bit<8> tmp;
+		tmp = hdr.udp.payload;
+		tmp = tmp + 1;
+		hdr.udp.payload = tmp;
+	}
+
+	action get_request_type(){
+		if (hdr.udp.payload == READ_REQUEST_L || hdr.udp.payload == READ_REQUEST_U){
+			hdr.udp.payload = WRITE_REQUEST_U;
 		}
-		actions = {
-			read_request;
-			write_request;
-			sync_request;
-			drop;
-			NoAction;
-		}
-		size = 1024;
-		default_action = drop();
 	}
-    
+
     apply {
-
-		if(hdr.payload.isValid()){
-			payload_lpm.apply();
-		}
 		polling_packet();
+		//change_payload();
+		get_request_type();
     }
 }
 
@@ -197,7 +210,18 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
               hdr.ipv4.dstAddr },
             hdr.ipv4.hdrChecksum,
             HashAlgorithm.csum16);
-    }
+	update_checksum_with_payload(
+	        hdr.udp.isValid(),
+	        {
+	        hdr.ipv4.srcAddr, hdr.ipv4.dstAddr, 8w0, hdr.ipv4.protocol, hdr.ipv4.totalLen, 16w0xffeb,
+	        hdr.udp.sport,
+	        hdr.udp.dport,
+	        hdr.udp.length,
+	        hdr.udp.payload
+	        },
+	        hdr.udp.checksum,
+	        HashAlgorithm.csum16);
+	}
 }
 
 /*************************************************************************
@@ -208,6 +232,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
+        packet.emit(hdr.udp);
     }
 }
 
