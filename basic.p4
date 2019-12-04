@@ -121,6 +121,10 @@ control MyIngress(inout headers hdr,
     action drop() {
         mark_to_drop(standard_metadata);
     }
+
+	action multicast(){
+		standard_metadata.mcast_grp = 1;
+	}
     
     action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
         standard_metadata.egress_spec = port;
@@ -129,34 +133,37 @@ control MyIngress(inout headers hdr,
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
 
-	action polling_packet(){
+	action broadcast(){
 		if(standard_metadata.ingress_port == 1){
+			multicast();
 			hdr.ipv4.ttl = hdr.ipv4.ttl  - 1;
-			standard_metadata.egress_port = 2;
-			standard_metadata.egress_spec = 2;
-		}else if(standard_metadata.ingress_port == 2){
-			hdr.ipv4.ttl = hdr.ipv4.ttl  - 2;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
 		}else if(standard_metadata.ingress_port == 3){
 			hdr.ipv4.ttl = hdr.ipv4.ttl  - 3;
-			standard_metadata.egress_port = 4;
-			standard_metadata.egress_spec = 4;
-		}else if(standard_metadata.ingress_port == 4){
-			hdr.ipv4.ttl = hdr.ipv4.ttl  - 4;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
 		}else if(standard_metadata.ingress_port == 5){
 			hdr.ipv4.ttl = hdr.ipv4.ttl  - 5;
 			standard_metadata.egress_port = 1;
 			standard_metadata.egress_spec = 1;
 		}
-
 	}
 
-	action read_request_from_user(){
-	}
-
-	action write_request_from_user(){
-	}
-
-	action sync_request_from_new_node(){
+	action polling_packet(){
+		if(standard_metadata.ingress_port == 1){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 1;
+			standard_metadata.egress_port = 2;
+			standard_metadata.egress_spec = 2;
+		}else if(standard_metadata.ingress_port == 3){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 3;
+			standard_metadata.egress_port = 4;
+			standard_metadata.egress_spec = 4;
+		}else if(standard_metadata.ingress_port == 5){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 5;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
+		}
 	}
 
 	action change_payload() {
@@ -167,14 +174,26 @@ control MyIngress(inout headers hdr,
 	}
 
 	action get_request_type(){
-		if (hdr.udp.payload == READ_REQUEST_L || hdr.udp.payload == READ_REQUEST_U){
+		if (hdr.udp.payload == READ_REQUEST_L){
+			hdr.udp.payload = READ_REQUEST_U;
+		}else if(hdr.udp.payload == READ_REQUEST_U){
+			hdr.udp.payload = READ_REQUEST_L;
+		}else if(hdr.udp.payload == WRITE_REQUEST_L){
 			hdr.udp.payload = WRITE_REQUEST_U;
+		}else if(hdr.udp.payload == WRITE_REQUEST_U){
+			hdr.udp.payload = WRITE_REQUEST_L;
+		}else if(hdr.udp.payload == SYNC_REQUEST_L){
+			hdr.udp.payload = SYNC_REQUEST_U;
+		}else if(hdr.udp.payload == SYNC_REQUEST_U){
+			hdr.udp.payload = SYNC_REQUEST_L;
 		}
 	}
 
     apply {
-		polling_packet();
-		//change_payload();
+		hdr.ethernet.dstAddr = 0x02;
+		//polling_packet();
+		broadcast();
+
 		get_request_type();
     }
 }
@@ -186,7 +205,15 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
-    apply {  }
+
+	action drop() {
+	    mark_to_drop(standard_metadata);
+	}
+
+    apply { 
+		//if (standard_metadata.egress_port == standard_metadata.ingress_port)
+		//	drop();
+	}
 }
 
 /*************************************************************************
