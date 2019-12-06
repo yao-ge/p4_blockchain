@@ -41,11 +41,11 @@ def handle_pkt(pkt):
         print "got a packet"
         pkt.show2()
         hexdump(pkt)
-        timestamp = pkt.load
-        print("timestamp:", timestamp[1:9])
-        time_string = timestamp[5:9]
-        time_string = ((struct.unpack(">i", time_string)))
-        print(time_string)
+        #timestamp = pkt.load
+        #print("timestamp:", timestamp[1:9])
+        #time_string = timestamp[5:9]
+        #time_string = ((struct.unpack(">i", time_string)))
+        #print(time_string)
         sys.stdout.flush()
 
 

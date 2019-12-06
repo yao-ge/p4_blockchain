@@ -31,8 +31,12 @@ def main():
     iface = get_if()
 
     print "sending on interface %s to %s" % (iface, str(addr))
+    block_data = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks"
     pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
-    payload = sys.argv[2] + '0' * 32
+    if sys.argv[2] == 'w':
+        payload = sys.argv[2] + '\0' * 32 + block_data
+    else:
+        payload = sys.argv[2] + '\0' * 32 + '\0' * 69
     pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / payload
     #pk_string = '\x00\x00\xFF\xFF\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x6F\x14\x01\x01\x01'
     #pk_string = '\x00\x00\x00\x00\x6F\x14'
