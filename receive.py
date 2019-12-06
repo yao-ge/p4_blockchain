@@ -9,6 +9,8 @@ from scapy.all import ShortField, IntField, LongField, BitField, FieldListField,
 from scapy.all import IP, TCP, UDP, Raw
 from scapy.layers.inet import _IPOption_HDR
 
+timestamp_list = []
+
 def get_if():
     ifs=get_if_list()
     iface=None
@@ -39,6 +41,11 @@ def handle_pkt(pkt):
         print "got a packet"
         pkt.show2()
         hexdump(pkt)
+        timestamp = pkt.load
+        print("timestamp:", timestamp[1:9])
+        time_string = timestamp[5:9]
+        time_string = ((struct.unpack(">i", time_string)))
+        print(time_string)
         sys.stdout.flush()
 
 

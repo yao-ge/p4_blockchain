@@ -32,7 +32,8 @@ def main():
 
     print "sending on interface %s to %s" % (iface, str(addr))
     pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
-    pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / sys.argv[2]
+    payload = sys.argv[2] + '0' * 32
+    pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / payload
     #pk_string = '\x00\x00\xFF\xFF\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x6F\x14\x01\x01\x01'
     #pk_string = '\x00\x00\x00\x00\x6F\x14'
     #pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / pk_string

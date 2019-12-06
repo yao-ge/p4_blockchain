@@ -9,6 +9,7 @@ const bit<16> TYPE_IPV4 = 0x800;
 *************************************************************************/
 
 
+// 'r','w','s' 
 #define READ_REQUEST_L  0x72
 #define READ_REQUEST_U  0x52
 #define WRITE_REQUEST_L 0x77
@@ -46,7 +47,9 @@ header udp_t {
     bit<16>   dport;
     bit<16>   length;
     bit<16>   checksum;
-    bit<8>  payload;
+	bit<8>    request_type;
+	bit<64>   header_hash;
+	bit<32>   header_hash_half;
 }
 
 
@@ -55,7 +58,7 @@ struct block_metadata_t {
 	bit<256>  data_hash;
 	bit<32>   timestamp;
 	bit<32>   nonce;
-	bit<8>  data;
+	bit<1024> data;
 }
 
 struct metadata {
@@ -68,6 +71,7 @@ struct headers {
     ipv4_t       ipv4;
 	udp_t        udp;
 }
+
 
 /*************************************************************************
 *********************** P A R S E R  ***********************************
@@ -110,6 +114,8 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
     apply {  }
 }
 
+register<bit<1>>(1) re_count;
+
 
 /*************************************************************************
 **************  I N G R E S S   P R O C E S S I N G   *******************
@@ -133,9 +139,8 @@ control MyIngress(inout headers hdr,
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
 
-	action broadcast(){
+	action change_egress_port(){
 		if(standard_metadata.ingress_port == 1){
-			multicast();
 			hdr.ipv4.ttl = hdr.ipv4.ttl  - 1;
 			standard_metadata.egress_port = 1;
 			standard_metadata.egress_spec = 1;
@@ -166,35 +171,59 @@ control MyIngress(inout headers hdr,
 		}
 	}
 
-	action change_payload() {
+	action change_request_type() {
 		bit<8> tmp;
-		tmp = hdr.udp.payload;
+		tmp = hdr.udp.request_type;
 		tmp = tmp + 1;
-		hdr.udp.payload = tmp;
+		hdr.udp.request_type = tmp;
+	}
+
+	action get_timestamp() {
+		hdr.udp.header_hash[47:0] = standard_metadata.ingress_global_timestamp;
+		hdr.udp.header_hash_half = standard_metadata.ingress_global_timestamp[31:0];
 	}
 
 	action get_request_type(){
-		if (hdr.udp.payload == READ_REQUEST_L){
-			hdr.udp.payload = READ_REQUEST_U;
-		}else if(hdr.udp.payload == READ_REQUEST_U){
-			hdr.udp.payload = READ_REQUEST_L;
-		}else if(hdr.udp.payload == WRITE_REQUEST_L){
-			hdr.udp.payload = WRITE_REQUEST_U;
-		}else if(hdr.udp.payload == WRITE_REQUEST_U){
-			hdr.udp.payload = WRITE_REQUEST_L;
-		}else if(hdr.udp.payload == SYNC_REQUEST_L){
-			hdr.udp.payload = SYNC_REQUEST_U;
-		}else if(hdr.udp.payload == SYNC_REQUEST_U){
-			hdr.udp.payload = SYNC_REQUEST_L;
+		if (hdr.udp.request_type == READ_REQUEST_L){
+			hdr.udp.request_type = READ_REQUEST_U;
+		}else if(hdr.udp.request_type == READ_REQUEST_U){
+			hdr.udp.request_type = READ_REQUEST_L;
+		}else if(hdr.udp.request_type == WRITE_REQUEST_L){
+			hdr.udp.request_type = WRITE_REQUEST_U;
+		}else if(hdr.udp.request_type == WRITE_REQUEST_U){
+			hdr.udp.request_type = WRITE_REQUEST_L;
+		}else if(hdr.udp.request_type == SYNC_REQUEST_L){
+			hdr.udp.request_type = SYNC_REQUEST_U;
+		}else if(hdr.udp.request_type == SYNC_REQUEST_U){
+			hdr.udp.request_type = SYNC_REQUEST_L;
 		}
 	}
 
     apply {
-		hdr.ethernet.dstAddr = 0x02;
+		//hdr.ethernet.dstAddr = 0x02;
 		//polling_packet();
-		broadcast();
 
-		get_request_type();
+		//if(standard_metadata.ingress_port == 1){
+		//	bit<1> tmp;
+		//	re_count.read(tmp, 0);
+		//	if(tmp != 1){
+		//		tmp = 1;
+		//		re_count.write(0, tmp);
+		//		resubmit(meta);
+		//	}
+		//}
+
+		if(standard_metadata.ingress_port == 1){
+			multicast();
+		}else if(standard_metadata.ingress_port == 5){
+			//multicast();
+			change_request_type();
+		}
+
+		change_egress_port();
+		change_request_type();
+		get_timestamp();
+		//get_request_type();
     }
 }
 
@@ -210,8 +239,19 @@ control MyEgress(inout headers hdr,
 	    mark_to_drop(standard_metadata);
 	}
 
+	action change_request_type() {
+		bit<8> tmp;
+		tmp = hdr.udp.request_type;
+		tmp = tmp + 1;
+		hdr.udp.request_type = tmp;
+	}
+
     apply { 
-		//if (standard_metadata.egress_port == standard_metadata.ingress_port)
+		if (standard_metadata.egress_port == 1 && standard_metadata.ingress_port == 1)
+			change_request_type();
+		else if(standard_metadata.ingress_port == standard_metadata.egress_port)
+			drop();
+		//else if(standard_metadata.egress_port == 1 && standard_metadata.ingress_port != 1)
 		//	drop();
 	}
 }
@@ -244,7 +284,9 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
 	        hdr.udp.sport,
 	        hdr.udp.dport,
 	        hdr.udp.length,
-	        hdr.udp.payload
+	        hdr.udp.request_type,
+	        hdr.udp.header_hash,
+	        hdr.udp.header_hash_half
 	        },
 	        hdr.udp.checksum,
 	        HashAlgorithm.csum16);
