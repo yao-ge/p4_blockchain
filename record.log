@@ -1,0 +1,2 @@
+1. if the packet do not meet the header struct, the program can not change the field value.
+

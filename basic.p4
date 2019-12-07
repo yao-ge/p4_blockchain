@@ -207,6 +207,20 @@ control MyIngress(inout headers hdr,
 		}
 	}
 
+	action add_block_count(){
+		bit<32> count = 0;
+		block_count.read(count, 0);
+		count = count + 1;
+		block_count.write(0, count);
+	}
+
+	action minus_block_count(){
+		bit<32> count = 0;
+		block_count.read(count, 0);
+		count = count - 1;
+		block_count.write(0, count);
+	}
+
 	action add_block_to_list(){
 		bit<1128> tmp = 0;
 		tmp[255:0] = meta.block_metadata.pre_header_hash;
@@ -223,6 +237,7 @@ control MyIngress(inout headers hdr,
 		bit<32> index = 0;
 		block_count.read(index, 0);
 		block_list.write(index, tmp);
+		add_block_count();
 	}
 
 	action read_block_from_list(){
@@ -233,22 +248,8 @@ control MyIngress(inout headers hdr,
 		block_list.read(tmp, index);
 	}
 
-	action add_block_count(){
-		bit<32> count = 0;
-		block_count.read(count, 0);
-		count = count + 1;
-		block_count.write(0, count);
-	}
-
-	action minus_block_count(){
-		bit<32> count = 0;
-		block_count.read(count, 0);
-		count = count - 1;
-		block_count.write(0, count);
-	}
-
 	action construct_genesis_block(){
-		meta.block_metadata.pre_header_hash = 0;
+		meta.block_metadata.pre_header_hash = 65535;
 		meta.block_metadata.data_hash = 255;
 		get_timestamp();
 		get_random();
@@ -257,17 +258,26 @@ control MyIngress(inout headers hdr,
 	}
 
     apply {
+
+		// broadcast
 		if(standard_metadata.ingress_port == 1){
 			multicast();
-		}else if(standard_metadata.ingress_port == 5){
-			change_request_type();
+		//}else if(standard_metadata.ingress_port == 5){
+		//	change_request_type();
+		}
+		change_egress_port();
+
+		if(hdr.udp.request_type == READ_REQUEST_L){
+			construct_genesis_block();
+			hdr.udp.header_hash = meta.block_metadata.pre_header_hash;
+		}else{
+			hdr.udp.header_hash = 255;
 		}
 
-		change_egress_port();
-		change_request_type();
-		get_timestamp();
-		get_random();
-		add_block_to_list();
+		//change_request_type();
+		//get_timestamp();
+		//get_random();
+		//add_block_to_list();
     }
 }
 

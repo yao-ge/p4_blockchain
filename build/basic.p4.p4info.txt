@@ -1,0 +1,70 @@
+pkg_info {
+  arch: "v1model"
+}
+actions {
+  preamble {
+    id: 16839654
+    name: "MyIngress.multicast"
+    alias: "multicast"
+  }
+}
+actions {
+  preamble {
+    id: 16828780
+    name: "MyIngress.change_egress_port"
+    alias: "change_egress_port"
+  }
+}
+actions {
+  preamble {
+    id: 16807502
+    name: "MyIngress.construct_genesis_block"
+    alias: "construct_genesis_block"
+  }
+}
+actions {
+  preamble {
+    id: 16816924
+    name: "MyEgress.drop"
+    alias: "drop"
+  }
+}
+actions {
+  preamble {
+    id: 16812946
+    name: "MyEgress.change_request_type"
+    alias: "change_request_type"
+  }
+}
+registers {
+  preamble {
+    id: 369134665
+    name: "block_list"
+    alias: "block_list"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 1128
+      }
+    }
+  }
+  size: 1024
+}
+registers {
+  preamble {
+    id: 369157804
+    name: "block_count"
+    alias: "block_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+type_info {
+}
