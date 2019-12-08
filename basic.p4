@@ -11,13 +11,19 @@ const bit<552>  data_string = 0x5468652054696d65732030332f4a616e2f32303039204368
 *************************************************************************/
 
 
-// 'r','w','s' 
+// 'i', 'r','w','s' 
+#define INIT_REQUEST_L  0x69
+#define INIT_REQUEST_U  0x49
 #define READ_REQUEST_L  0x72
 #define READ_REQUEST_U  0x52
 #define WRITE_REQUEST_L 0x77
 #define WRITE_REQUEST_U 0x57
 #define SYNC_REQUEST_L  0x73
 #define SYNC_REQUEST_U  0x53
+
+#define SINGLE_NODE_BLOCK_COUNT 1024
+#define NODE_SEQ(in_port) in_port/2;    // max = 9, begin from 0
+#define BLOCK_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count;    // max = 10240
 
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
@@ -116,10 +122,16 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
     apply {  }
 }
 
+/*************************************************************************
+************   R E G I S T E R   *****************************************
+*************************************************************************/
+
+
 //register<bit<1>>(1) re_count;
 
-register<bit<1128>>(1024)  block_list;
-register<bit<32>>(1)       block_count;
+// max node num 10, each node has 1024 block
+register<bit<1128>>(10240)  block_list;
+register<bit<32>>(10)       block_count;
 
 
 /*************************************************************************
@@ -136,7 +148,7 @@ control MyIngress(inout headers hdr,
 	action multicast(){
 		standard_metadata.mcast_grp = 1;
 	}
-    
+
     action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
         standard_metadata.egress_spec = port;
         hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
@@ -157,6 +169,10 @@ control MyIngress(inout headers hdr,
 			hdr.ipv4.ttl = hdr.ipv4.ttl  - 5;
 			standard_metadata.egress_port = 1;
 			standard_metadata.egress_spec = 1;
+		}else if(standard_metadata.ingress_port == 7){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 5;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
 		}
 	}
 
@@ -171,6 +187,10 @@ control MyIngress(inout headers hdr,
 			standard_metadata.egress_spec = 4;
 		}else if(standard_metadata.ingress_port == 5){
 			hdr.ipv4.ttl = hdr.ipv4.ttl  - 5;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
+		}else if(standard_metadata.ingress_port == 7){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 7;
 			standard_metadata.egress_port = 1;
 			standard_metadata.egress_spec = 1;
 		}
@@ -207,18 +227,26 @@ control MyIngress(inout headers hdr,
 		}
 	}
 
+	action set_block_count_to_zero(){
+		bit<32> count = 0;
+	}
+
 	action add_block_count(){
 		bit<32> count = 0;
-		block_count.read(count, 0);
+		bit<32> index = 0;
+		index[8:0] = NODE_SEQ(standard_metadata.ingress_port);
+		block_count.read(count, index);
 		count = count + 1;
-		block_count.write(0, count);
+		block_count.write(index, count);
 	}
 
 	action minus_block_count(){
 		bit<32> count = 0;
-		block_count.read(count, 0);
+		bit<32> index = 0;
+		index[8:0] = NODE_SEQ(standard_metadata.ingress_port);
+		block_count.read(count, index);
 		count = count - 1;
-		block_count.write(0, count);
+		block_count.write(index, count);
 	}
 
 	action add_block_to_list(){
@@ -258,8 +286,7 @@ control MyIngress(inout headers hdr,
 	}
 
     apply {
-
-		// broadcast
+		// broadcast, from port 1 to port 3 and 5, back to port 1
 		if(standard_metadata.ingress_port == 1){
 			multicast();
 		//}else if(standard_metadata.ingress_port == 5){
@@ -267,18 +294,31 @@ control MyIngress(inout headers hdr,
 		}
 		change_egress_port();
 
-		bit<32> b_count = 0;
-		if(0 == b_count){
-			construct_genesis_block();
-		}
 
-		block_count.read(b_count, 0);
-		if(0 != b_count)
-			hdr.udp.header_hash = 1;
-		//change_request_type();
-		//get_timestamp();
-		//get_random();
-		//add_block_to_list();
+		// step 1: initialize the genesis block
+		if((hdr.udp.request_type == INIT_REQUEST_L) || (hdr.udp.request_type == INIT_REQUEST_U)){
+			// set the block count to 0
+			hdr.udp.header_hash[8:0] = NODE_SEQ(standard_metadata.ingress_port);
+			hdr.udp.header_hash[31:8] = BLOCK_LIST_INDEX(9, 1);
+		}
+		// step 2: analysis the request type
+		// step 3: if the request type is init, init the env and create genesis block
+		// step 4: if the request type is read, return the lastest block header hash to user
+		// step 5: if the request type is write, create a new block and return the new block header hash to user
+		// step 6: if the request type is sync, do sync job
+
+		//bit<32> b_count = 0;
+		//if(0 == b_count){
+		//	construct_genesis_block();
+		//}
+
+		//block_count.read(b_count, 0);
+		//if(0 != b_count)
+		//	hdr.udp.header_hash = 1;
+		////change_request_type();
+		////get_timestamp();
+		////get_random();
+		////add_block_to_list();
     }
 }
 

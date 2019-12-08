@@ -35,9 +35,11 @@ def main():
 
 
     while True:
-        request_string = raw_input("\n\033[31mread[r]/\033[32mwrite[w]/\033[34mexit[e]\n\033[37mrequest:")
+        request_string = raw_input("\n\033[31mread[r]/\033[32mwrite[w]/\033[33minit[i]/\033[34mexit[e]\n\033[37mrequest:")
         if 'r' == request_string or 'read' == request_string:
             payload = 'r' + '\0' * 32 + '\0' * 69
+        elif 'i' == request_string or 'init' == request_string:
+            payload = 'i' + '\0' * 32 + '\0' * 69
         elif 'w' == request_string or 'write' == request_string:
             payload = 'w' + pre_header_hash + data_string
         elif 'e' == request_string or 'exit' == request_string:
