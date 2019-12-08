@@ -267,13 +267,14 @@ control MyIngress(inout headers hdr,
 		}
 		change_egress_port();
 
-		if(hdr.udp.request_type == READ_REQUEST_L){
+		bit<32> b_count = 0;
+		if(0 == b_count){
 			construct_genesis_block();
-			hdr.udp.header_hash = meta.block_metadata.pre_header_hash;
-		}else{
-			hdr.udp.header_hash = 255;
 		}
 
+		block_count.read(b_count, 0);
+		if(0 != b_count)
+			hdr.udp.header_hash = 1;
 		//change_request_type();
 		//get_timestamp();
 		//get_random();
