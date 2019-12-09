@@ -1,2 +1,2 @@
 1. if the packet do not meet the header struct, the program can not change the field value.
-2. bug in utils/run_exercise.py 118: sw_port[1] => sw_port[1:]
+2. bug in utils/run_exercise.py 116: sw_port[1] => sw_port[1:]

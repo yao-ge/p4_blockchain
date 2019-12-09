@@ -22,8 +22,9 @@ const bit<552>  data_string = 0x5468652054696d65732030332f4a616e2f32303039204368
 #define SYNC_REQUEST_U  0x53
 
 #define SINGLE_NODE_BLOCK_COUNT 1024
-#define NODE_SEQ(in_port) in_port/2;    // max = 9, begin from 0
-#define BLOCK_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count;    // max = 10240
+#define NODE_SEQ(in_port) in_port/2    // max = 9, begin from 0
+#define BLOCK_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count    // max = 10240
+#define BLOCK_HEADER_HASH_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count    // max = 10240
 
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
@@ -62,6 +63,7 @@ header udp_t {
 
 
 struct block_metadata_t {
+	bit<256>  curr_header_hash;
 	bit<256>  pre_header_hash;
 	bit<256>  data_hash;
 	bit<32>   timestamp;
@@ -131,7 +133,9 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 
 // max node num 10, each node has 1024 block
 register<bit<1128>>(10240)  block_list;
+register<bit<256>>(10240)   curr_block_header_hash_list;
 register<bit<32>>(10)       block_count;
+register<bit<32>>(1)        get_proof_of_work_done;
 
 
 /*************************************************************************
@@ -170,7 +174,15 @@ control MyIngress(inout headers hdr,
 			standard_metadata.egress_port = 1;
 			standard_metadata.egress_spec = 1;
 		}else if(standard_metadata.ingress_port == 7){
-			hdr.ipv4.ttl = hdr.ipv4.ttl  - 5;
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 7;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
+		}else if(standard_metadata.ingress_port == 9){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 9;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
+		}else if(standard_metadata.ingress_port == 11){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 11;
 			standard_metadata.egress_port = 1;
 			standard_metadata.egress_spec = 1;
 		}
@@ -229,6 +241,9 @@ control MyIngress(inout headers hdr,
 
 	action set_block_count_to_zero(){
 		bit<32> count = 0;
+		bit<32> index = 0;
+		index[8:0] = NODE_SEQ(standard_metadata.ingress_port);
+		block_count.write(index, 0);
 	}
 
 	action add_block_count(){
@@ -262,63 +277,164 @@ control MyIngress(inout headers hdr,
 		tmp = tmp << 256;
 		tmp = tmp << 40;
 		tmp[551:0] = meta.block_metadata.data;
-		bit<32> index = 0;
-		block_count.read(index, 0);
-		block_list.write(index, tmp);
+
+		bit<32> b_seq = 0;
+		bit<32> b_count = 0;
+		bit<32> bl_count = 0;
+		bit<32> curr_bh_count = 0;
+		b_seq[8:0] = NODE_SEQ(standard_metadata.ingress_port);
+		block_count.read(b_count, b_seq);
+		bl_count = BLOCK_LIST_INDEX(b_seq, b_count);
+		curr_bh_count = BLOCK_HEADER_HASH_LIST_INDEX(b_seq, b_count);
+
+		block_list.write(bl_count, tmp);
+		curr_block_header_hash_list.write(curr_bh_count, meta.block_metadata.curr_header_hash);
 		add_block_count();
+		hdr.udp.header_hash = meta.block_metadata.curr_header_hash;
+	}
+
+	action read_header_hash_from_list(){
+		bit<256> tmp = 0;
+		bit<32> b_seq = 0;
+		bit<32> b_count = 0;
+		bit<32> curr_bh_count = 0;
+		b_seq[8:0] = NODE_SEQ(standard_metadata.ingress_port);
+		block_count.read(b_count, b_seq);
+		curr_bh_count = BLOCK_HEADER_HASH_LIST_INDEX(b_seq, b_count - 1);
+
+		curr_block_header_hash_list.read(tmp, curr_bh_count);
+		hdr.udp.header_hash = tmp;
+		meta.block_metadata.pre_header_hash = tmp;
 	}
 
 	action read_block_from_list(){
 		bit<1128> tmp = 0;
-		bit<32> index = 0;
+		bit<32> b_seq = 0;
+		bit<32> b_count = 0;
+		bit<32> bl_count = 0;
+		b_seq[8:0] = NODE_SEQ(standard_metadata.ingress_port);
+		block_count.read(b_count, b_seq);
+		bl_count = BLOCK_LIST_INDEX(b_seq, b_count - 1);
 		
-		block_count.read(index, 0);
-		block_list.read(tmp, index);
+		block_list.read(tmp, bl_count);
+
+		meta.block_metadata.pre_header_hash = tmp[1127:872];
+		meta.block_metadata.data_hash = tmp[871:616];
+		meta.block_metadata.timestamp = tmp[615:584];
+		meta.block_metadata.nonce = tmp[583:552];
+		meta.block_metadata.data = tmp[551:0];
+
+		read_header_hash_from_list();
+		//hdr.udp.header_hash = meta.block_metadata.pre_header_hash;
+		//hdr.udp.data = data_string;
 	}
 
 	action construct_genesis_block(){
 		meta.block_metadata.pre_header_hash = 65535;
-		meta.block_metadata.data_hash = 255;
+		meta.block_metadata.data_hash = 0;
 		get_timestamp();
 		get_random();
-		meta.block_metadata.data = hdr.udp.data;
+		meta.block_metadata.data = data_string;
+		meta.block_metadata.curr_header_hash = 85;
 		add_block_to_list();
 	}
 
+	action construct_new_block() {
+		meta.block_metadata.pre_header_hash = meta.block_metadata.curr_header_hash;
+		meta.block_metadata.data_hash = 0;
+		get_timestamp();
+		get_random();
+		meta.block_metadata.data = data_string;
+		meta.block_metadata.curr_header_hash = 84;
+		add_block_to_list();
+	}
+
+	action init_proof_of_work_register(){
+		get_proof_of_work_done.write(0, 0);
+	}
+
+	action set_proof_of_work_register(){
+		get_proof_of_work_done.write(0, 1);
+	}
+
     apply {
-		// broadcast, from port 1 to port 3 and 5, back to port 1
-		if(standard_metadata.ingress_port == 1){
-			multicast();
-		//}else if(standard_metadata.ingress_port == 5){
-		//	change_request_type();
-		}
-		change_egress_port();
-
-
 		// step 1: initialize the genesis block
-		if((hdr.udp.request_type == INIT_REQUEST_L) || (hdr.udp.request_type == INIT_REQUEST_U)){
-			// set the block count to 0
-			hdr.udp.header_hash[8:0] = NODE_SEQ(standard_metadata.ingress_port);
-			hdr.udp.header_hash[31:8] = BLOCK_LIST_INDEX(9, 1);
-		}
 		// step 2: analysis the request type
 		// step 3: if the request type is init, init the env and create genesis block
+		if((hdr.udp.request_type == INIT_REQUEST_L) || (hdr.udp.request_type == INIT_REQUEST_U)){
+			if(standard_metadata.ingress_port == 1){
+				multicast();
+			}else{
+				// set the block count to 0
+				set_block_count_to_zero();
+				// create genesis block
+				construct_genesis_block();
+				read_block_from_list();
+			}
+			// broadcast, from port 1 to port 3 and 5, back to port 1
+			change_egress_port();
 		// step 4: if the request type is read, return the lastest block header hash to user
+		}else if((hdr.udp.request_type == READ_REQUEST_L) || (hdr.udp.request_type == READ_REQUEST_U)){
+			if(standard_metadata.ingress_port == 1){
+				standard_metadata.egress_spec = 2;
+				standard_metadata.egress_port = 2;
+			}else if(standard_metadata.ingress_port == 3){
+				hdr.ipv4.ttl = 53;
+				read_block_from_list();
+				standard_metadata.egress_spec = 1;
+				standard_metadata.egress_port = 1;
+			}
 		// step 5: if the request type is write, create a new block and return the new block header hash to user
+		}else if((hdr.udp.request_type == WRITE_REQUEST_L) || (hdr.udp.request_type == WRITE_REQUEST_U)){
+			// step 5.1: broadcast write request to all nodes
+			// step 5.2: all nodes start to do proof of work
+			// step 5.3: one node broadcast its result to other nodes
+			// step 5.4: other nodes stop to send out packet
+			// step 5.5: save the result and send header hash to user
+			if(standard_metadata.ingress_port == 1){
+				init_proof_of_work_register();
+				multicast();
+			}else{
+				// do proof of work job
+				construct_new_block();
+				hdr.ipv4.ttl = 51;
+				standard_metadata.egress_spec = 1;
+				standard_metadata.egress_port = 1;
+				bit<32> tmp = 0;
+				get_proof_of_work_done.read(tmp, 0);
+				if(tmp == 0){
+					set_proof_of_work_register();
+					hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
+				}else
+					drop();
+
+				//if(standard_metadata.ingress_port == 5){
+				//	hdr.ipv4.ttl = 51;
+				//	standard_metadata.egress_spec = 1;
+				//	standard_metadata.egress_port = 1;
+				//	bit<32> tmp = 0;
+				//	get_proof_of_work_done.read(tmp, 0);
+				//	if(tmp == 0){
+				//		set_proof_of_work_register();
+				//	}
+				//	else
+				//		hdr.udp.header_hash[8:0] = standard_metadata.ingress_port;
+				//}else{
+				//	hdr.ipv4.ttl = 41;
+				//	standard_metadata.egress_spec = 1;
+				//	standard_metadata.egress_port = 1;
+				//	bit<32> tmp = 0;
+				//	get_proof_of_work_done.read(tmp, 0);
+				//	if(tmp == 0)
+				//		set_proof_of_work_register();
+				//	else
+				//		hdr.udp.header_hash[8:0] = standard_metadata.ingress_port;
+				//}
+			}
+		}else{
+			polling_packet();
+		}
 		// step 6: if the request type is sync, do sync job
-
-		//bit<32> b_count = 0;
-		//if(0 == b_count){
-		//	construct_genesis_block();
-		//}
-
-		//block_count.read(b_count, 0);
-		//if(0 != b_count)
-		//	hdr.udp.header_hash = 1;
-		////change_request_type();
-		////get_timestamp();
-		////get_random();
-		////add_block_to_list();
     }
 }
 
@@ -337,17 +453,21 @@ control MyEgress(inout headers hdr,
 	action change_request_type() {
 		bit<8> tmp;
 		tmp = hdr.udp.request_type;
-		tmp = tmp + 1;
+		tmp = tmp + 0;
 		hdr.udp.request_type = tmp;
 	}
 
     apply { 
-		if (standard_metadata.egress_port == 1 && standard_metadata.ingress_port == 1)
-			change_request_type();
-		else if(standard_metadata.ingress_port == standard_metadata.egress_port)
-			drop();
+		//if (standard_metadata.egress_port == 1 && standard_metadata.ingress_port == 1)
+		//	change_request_type();
+		//else if(standard_metadata.ingress_port == standard_metadata.egress_port)
+		//	drop();
 		//else if(standard_metadata.egress_port == 1 && standard_metadata.ingress_port != 1)
 		//	drop();
+		
+		if(standard_metadata.ingress_port == standard_metadata.egress_port){
+			drop();
+		}
 	}
 }
 
