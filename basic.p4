@@ -149,6 +149,7 @@ register<bit<32>>(1)        done_count;						 // count of node done proof of wor
 register<bit<32>>(1)		done_index;						 // index of done register, begin from zero. for verify
 register<bit<32>>(1)        verify_sha256_nodes_count;       // finish verify nodes count
 register<bit<32>>(1)        nodes_count;                     // total nodes count
+register<bit<1>>(1)			verify_finish;					 // indicate verify action is finished
 
 
 /*************************************************************************
@@ -502,6 +503,7 @@ control MyIngress(inout headers hdr,
 							resubmit(standard_metadata);
 						}
 					}else{
+						read_block_from_list();
 						hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
 						hdr.ipv4.ttl = 53;
 						standard_metadata.egress_spec = 1;
