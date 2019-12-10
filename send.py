@@ -35,7 +35,7 @@ def main():
 
 
     while True:
-        request_string = raw_input("\n\033[31mread[r]/\033[32mwrite[w]/\033[33minit[i]/\033[34mexit[e]\n\033[37mrequest:")
+        request_string = raw_input("\n\033[31mread[r]/\033[32mwrite[w]/\033[33minit[i]/\033[35msync[s]/\033[36mexit[e]\n\033[37mrequest:")
         if 'r' == request_string or 'read' == request_string:
             payload = 'r' + '\0' * 32 + '\0' * 69
         elif 'i' == request_string or 'init' == request_string:

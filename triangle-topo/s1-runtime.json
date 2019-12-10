@@ -9,11 +9,11 @@
 		  "multicast_group_id": 1,
 		  "replicas": [
 			  {
-				  "egress_port": 2,
+				  "egress_port": 4,
 				  "instance": 1
 			  },
 			  {
-				  "egress_port": 4,
+				  "egress_port": 2,
 				  "instance": 1
 			  },
 			  {
