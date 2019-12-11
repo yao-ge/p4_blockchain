@@ -147,9 +147,9 @@ register<bit<32>>(10)       done_list;						 // record the node who has finished
 register<bit<32>>(1)		proof_of_work_done;				 // indicate node has finish proof of work
 register<bit<32>>(1)        done_count;						 // count of node done proof of work
 register<bit<32>>(1)		done_index;						 // index of done register, begin from zero. for verify
-register<bit<32>>(1)        verify_sha256_nodes_count;       // finish verify nodes count
+register<bit<32>>(1)        verify_failed_count;			 // indicate verify failed node count
+register<bit<32>>(1)		verify_success_count;			 // indicate verify success node count 
 register<bit<32>>(1)        nodes_count;                     // total nodes count
-register<bit<1>>(1)			verify_finish;					 // indicate verify action is finished
 
 
 /*************************************************************************
@@ -255,7 +255,7 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.bh_index = BLOCK_HEADER_HASH_LIST_INDEX(meta.block_metadata.node_seq, b_count);
 	}
 
-	action set_block_count_to_zero(){
+	action init_block_count(){
 		bit<32> count = 0;
 
 		get_node_seq_bl_bh_index();
@@ -268,15 +268,6 @@ control MyIngress(inout headers hdr,
 		get_node_seq_bl_bh_index();
 		block_count.read(count, meta.block_metadata.node_seq);
 		count = count + 1;
-		block_count.write(meta.block_metadata.node_seq, count);
-	}
-
-	action minus_block_count(){
-		bit<32> count = 0;
-
-		get_node_seq_bl_bh_index();
-		block_count.read(count, meta.block_metadata.node_seq);
-		count = count - 1;
 		block_count.write(meta.block_metadata.node_seq, count);
 	}
 
@@ -330,8 +321,6 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.pre_header_hash = 65535;
 		meta.block_metadata.data = data_string;
 		meta.block_metadata.data_hash = FAKE_SHA256(meta.block_metadata.data);
-		//get_timestamp();
-		//get_random();
 		meta.block_metadata.timestamp = 0;
 		meta.block_metadata.nonce = 0;
 		meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+\
@@ -366,7 +355,8 @@ control MyIngress(inout headers hdr,
 		done_count.write(0, 0);
 		done_index.write(0, 0);
 		proof_of_work_done.write(0, 0);
-		verify_sha256_nodes_count.write(0, 0);
+		verify_failed_count.write(0, 0);
+		verify_success_count.write(0, 0);
 	}
 
 	action add_done_count(){
@@ -408,15 +398,11 @@ control MyIngress(inout headers hdr,
 		nodes_count.write(0, tmp);
 	}
 
-	action init_verify_nodes_count(){
-		verify_sha256_nodes_count.write(0, 0);
-	}
-
 	action add_verify_nodes_count(){
 		bit<32> tmp = 0;
-		verify_sha256_nodes_count.read(tmp, 0);
+		verify_failed_count.read(tmp, 0);
 		tmp = tmp + 1;
-		verify_sha256_nodes_count.write(0, tmp);
+		verify_failed_count.write(0, tmp);
 	}
 
 	action verify_block(){
@@ -456,7 +442,7 @@ control MyIngress(inout headers hdr,
 					init_nodes_count();
 				}else{
 					// set the block count to 0
-					set_block_count_to_zero();
+					init_block_count();
 					// create genesis block
 					construct_genesis_block();
 					read_block_from_list();
@@ -503,11 +489,20 @@ control MyIngress(inout headers hdr,
 							resubmit(standard_metadata);
 						}
 					}else{
-						read_block_from_list();
-						hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
-						hdr.ipv4.ttl = 53;
-						standard_metadata.egress_spec = 1;
-						standard_metadata.egress_port = 1;
+						// 0. if verify_success_count is 1, drop;
+						// 1. read block from register done_list according done_index;
+						// 2. verify this block;
+						// 3. add verify_failed_count;
+						// 4. determine verify_failed_count bigger than half of nodes_count
+						//     4.1 if true and verify_success_count is 0, save the block to block list and forward;
+						//     4.2 if true and verify finish is 1, save the block to block list and drop;
+						//     4.3 if false,
+
+						//read_block_from_list();
+						//hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
+						//hdr.ipv4.ttl = 53;
+						//standard_metadata.egress_spec = 1;
+						//standard_metadata.egress_port = 1;
 						//drop();
 					}
 				}

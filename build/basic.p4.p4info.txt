@@ -1,0 +1,246 @@
+pkg_info {
+  arch: "v1model"
+}
+actions {
+  preamble {
+    id: 16839654
+    name: "MyIngress.multicast"
+    alias: "multicast"
+  }
+}
+actions {
+  preamble {
+    id: 16828780
+    name: "MyIngress.change_egress_port"
+    alias: "change_egress_port"
+  }
+}
+actions {
+  preamble {
+    id: 16824508
+    name: "MyIngress.polling_packet"
+    alias: "polling_packet"
+  }
+}
+actions {
+  preamble {
+    id: 16820632
+    name: "MyIngress.get_node_seq_bl_bh_index"
+    alias: "get_node_seq_bl_bh_index"
+  }
+}
+actions {
+  preamble {
+    id: 16791844
+    name: "MyIngress.set_block_count_to_zero"
+    alias: "set_block_count_to_zero"
+  }
+}
+actions {
+  preamble {
+    id: 16839226
+    name: "MyIngress.read_block_from_list"
+    alias: "read_block_from_list"
+  }
+}
+actions {
+  preamble {
+    id: 16807502
+    name: "MyIngress.construct_genesis_block"
+    alias: "construct_genesis_block"
+  }
+}
+actions {
+  preamble {
+    id: 16790199
+    name: "MyIngress.construct_new_block"
+    alias: "construct_new_block"
+  }
+}
+actions {
+  preamble {
+    id: 16800689
+    name: "MyIngress.init_proof_of_work_register"
+    alias: "init_proof_of_work_register"
+  }
+}
+actions {
+  preamble {
+    id: 16777960
+    name: "MyIngress.set_proof_of_work_register"
+    alias: "set_proof_of_work_register"
+  }
+}
+actions {
+  preamble {
+    id: 16837306
+    name: "MyIngress.init_nodes_count"
+    alias: "init_nodes_count"
+  }
+}
+actions {
+  preamble {
+    id: 16840195
+    name: "MyIngress.add_nodes_count"
+    alias: "add_nodes_count"
+  }
+}
+actions {
+  preamble {
+    id: 16816924
+    name: "MyEgress.drop"
+    alias: "drop"
+  }
+}
+registers {
+  preamble {
+    id: 369134665
+    name: "block_list"
+    alias: "block_list"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 1128
+      }
+    }
+  }
+  size: 10240
+}
+registers {
+  preamble {
+    id: 369106454
+    name: "curr_block_header_hash_list"
+    alias: "curr_block_header_hash_list"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 256
+      }
+    }
+  }
+  size: 10240
+}
+registers {
+  preamble {
+    id: 369157804
+    name: "block_count"
+    alias: "block_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 10
+}
+registers {
+  preamble {
+    id: 369112718
+    name: "done_list"
+    alias: "done_list"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 10
+}
+registers {
+  preamble {
+    id: 369136829
+    name: "proof_of_work_done"
+    alias: "proof_of_work_done"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369154978
+    name: "done_count"
+    alias: "done_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369119300
+    name: "done_index"
+    alias: "done_index"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369142784
+    name: "verify_sha256_nodes_count"
+    alias: "verify_sha256_nodes_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369146685
+    name: "nodes_count"
+    alias: "nodes_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369110745
+    name: "verify_finish"
+    alias: "verify_finish"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 1
+      }
+    }
+  }
+  size: 1
+}
+type_info {
+}
