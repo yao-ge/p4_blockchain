@@ -143,7 +143,7 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 register<bit<1128>>(10240)  block_list;                      // save block 
 register<bit<256>>(10240)   curr_block_header_hash_list;     // save header hash of block
 register<bit<32>>(10)       block_count;					 // indicate block count of each node
-register<bit<32>>(10)       done_list;						 // record the node who has finished proof of work
+register<bit<32>>(10)       done_list;						 // record the block index who has finished proof of work
 register<bit<32>>(1)		proof_of_work_done;				 // indicate node has finish proof of work
 register<bit<32>>(1)        done_count;						 // count of node done proof of work
 register<bit<32>>(1)		done_index;						 // index of done register, begin from zero. for verify
@@ -192,6 +192,26 @@ control MyIngress(inout headers hdr,
 			hdr.ipv4.ttl = hdr.ipv4.ttl  - 11;
 			standard_metadata.egress_port = 1;
 			standard_metadata.egress_spec = 1;
+		}else if(standard_metadata.ingress_port == 13){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 13;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
+		}else if(standard_metadata.ingress_port == 15){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 15;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
+		}else if(standard_metadata.ingress_port == 17){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 17;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
+		}else if(standard_metadata.ingress_port == 19){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 19;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
+		}else if(standard_metadata.ingress_port == 21){
+			hdr.ipv4.ttl = hdr.ipv4.ttl  - 21;
+			standard_metadata.egress_port = 1;
+			standard_metadata.egress_spec = 1;
 		}
 	}
 
@@ -206,8 +226,8 @@ control MyIngress(inout headers hdr,
 			standard_metadata.egress_spec = 4;
 		}else if(standard_metadata.ingress_port == 5){
 			hdr.ipv4.ttl = hdr.ipv4.ttl  - 5;
-			standard_metadata.egress_port = 1;
-			standard_metadata.egress_spec = 1;
+			standard_metadata.egress_port = 6;
+			standard_metadata.egress_spec = 6;
 		}else if(standard_metadata.ingress_port == 7){
 			hdr.ipv4.ttl = hdr.ipv4.ttl  - 7;
 			standard_metadata.egress_port = 1;
@@ -323,9 +343,7 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.data_hash = FAKE_SHA256(meta.block_metadata.data);
 		meta.block_metadata.timestamp = 0;
 		meta.block_metadata.nonce = 0;
-		meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+\
-				meta.block_metadata.data_hash+meta.block_metadata.timestamp+\
-				meta.block_metadata.nonce);
+		meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
 		add_block_to_list();
 	}
 
@@ -335,9 +353,7 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.data_hash = FAKE_SHA256(meta.block_metadata.data);
 		get_timestamp();
 		get_random();
-		meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+\
-				meta.block_metadata.data_hash+meta.block_metadata.timestamp+\
-				meta.block_metadata.nonce);
+		meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
 		add_block_to_list();
 	}
 
@@ -388,7 +404,7 @@ control MyIngress(inout headers hdr,
 	}
 
 	action init_nodes_count(){
-		nodes_count.write(0, 0);
+		nodes_count.write(0, 2);
 	}
 
 	action add_nodes_count(){
@@ -398,7 +414,14 @@ control MyIngress(inout headers hdr,
 		nodes_count.write(0, tmp);
 	}
 
-	action add_verify_nodes_count(){
+	action add_verify_success_count(){
+		bit<32> tmp = 0;
+		verify_success_count.read(tmp, 0);
+		tmp = tmp + 1;
+		verify_success_count.write(0, tmp);
+	}
+
+	action add_verify_failed_count(){
 		bit<32> tmp = 0;
 		verify_failed_count.read(tmp, 0);
 		tmp = tmp + 1;
@@ -407,13 +430,14 @@ control MyIngress(inout headers hdr,
 
 	action verify_block(){
 		bit<1128> tmp = 0;
-		bit<256>  curr_header_hash = 0;
 		bit<32>   bl_count = 0;
+		bit<32>   d_index = 0;
 
-		get_node_seq_bl_bh_index();
-		done_list.read(bl_count, 0);
+		done_index.read(d_index, 0);
 
-		block_list.read(tmp, bl_count);
+		done_list.read(bl_count, d_index);
+
+		block_list.read(tmp, bl_count - 1);
 
 		meta.block_metadata.pre_header_hash = tmp[1127:872];
 		meta.block_metadata.data_hash = tmp[871:616];
@@ -421,13 +445,48 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.nonce = tmp[583:552];
 		//meta.block_metadata.data = tmp[551:0];
 
-		curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+\
-				meta.block_metadata.data_hash+meta.block_metadata.timestamp+\
-				meta.block_metadata.nonce);
+		meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
 
-		if(0 == curr_header_hash[255:255 - HEADER_HASH_ZERO_COUNT]){
-			add_verify_nodes_count();
-		}
+		//if(0 == curr_header_hash[255:255 - HEADER_HASH_ZERO_COUNT]){
+		//	add_verify_success_count();
+		//}else{
+		//	add_verify_failed_count();
+		//}
+
+	}
+
+	action sync_block(){
+		bit<32> index = 0;
+		bit<32> b_index = 0;
+		bit<1128> tmp = 0;
+		bit<32> n_count = 0;
+		bit<32> d_index = 0;
+
+		done_index.read(d_index, 0);
+		done_list.read(b_index, d_index);
+		index = b_index % 1024;
+		nodes_count.read(n_count, 0);
+
+		block_list.read(tmp, b_index - 1);
+		block_list.write(index + 0, tmp);
+		if(n_count > 1)
+			block_list.write(index + (1024 * 1), tmp);
+		if(n_count > 2)
+			block_list.write(index + (1024 * 2), tmp);
+		if(n_count > 3)
+			block_list.write(index + (1024 * 3), tmp);
+		if(n_count > 4)
+			block_list.write(index + (1024 * 4), tmp);
+		if(n_count > 5)
+			block_list.write(index + (1024 * 5), tmp);
+		if(n_count > 6)
+			block_list.write(index + (1024 * 6), tmp);
+		if(n_count > 7)
+			block_list.write(index + (1024 * 7), tmp);
+		if(n_count > 8)
+			block_list.write(index + (1024 * 8), tmp);
+		if(n_count > 9)
+			block_list.write(index + (1024 * 9), tmp);
 	}
 
 
@@ -441,12 +500,16 @@ control MyIngress(inout headers hdr,
 					multicast();
 					init_nodes_count();
 				}else{
+					bit<32> n_count = 0;
+					nodes_count.read(n_count, 0);
+					if(standard_metadata.ingress_port > ((bit<9>)n_count * 2)){
+						drop();
+					}
 					// set the block count to 0
 					init_block_count();
 					// create genesis block
 					construct_genesis_block();
 					read_block_from_list();
-					add_nodes_count();
 				}
 				// broadcast, from port 1 to port 3 and 5, back to port 1
 				change_egress_port();
@@ -468,11 +531,17 @@ control MyIngress(inout headers hdr,
 				// step 5.3: one node broadcast its result to other nodes
 				// step 5.4: other nodes stop to send out packet
 				// step 5.5: save the result and send header hash to user
+
 				if(standard_metadata.ingress_port == 1){
 					init_proof_of_work_register();
 					multicast();
 				}else{
 					// do proof of work job
+					bit<32> n_count = 0;
+					nodes_count.read(n_count, 0);
+					if(standard_metadata.ingress_port > ((bit<9>)n_count * 2)){
+						drop();
+					}
 					bit<32> b_count = 0;
 					get_node_seq_bl_bh_index();
 					proof_of_work_done.read(b_count, 0);
@@ -481,7 +550,6 @@ control MyIngress(inout headers hdr,
 						construct_new_block();
 						if(0 != meta.block_metadata.curr_header_hash[255:255 - HEADER_HASH_ZERO_COUNT]){
 							resubmit(standard_metadata);
-							return;
 						}else{
 							hdr.ipv4.ttl = 51;
 							set_proof_of_work_register();
@@ -489,22 +557,56 @@ control MyIngress(inout headers hdr,
 							resubmit(standard_metadata);
 						}
 					}else{
-						// 0. if verify_success_count is 1, drop;
+						// 0. if verify_success_count is bigger than half of nodes count, drop;
+						bit<32> vs_count = 0;
+						verify_success_count.read(vs_count, 0);
+						nodes_count.read(n_count, 0);
+						if(vs_count > (n_count / 2)){
+							drop();
+							return;
+						}
 						// 1. read block from register done_list according done_index;
 						// 2. verify this block;
 						// 3. add verify_failed_count;
-						// 4. determine verify_failed_count bigger than half of nodes_count
-						//     4.1 if true and verify_success_count is 0, save the block to block list and forward;
-						//     4.2 if true and verify finish is 1, save the block to block list and drop;
-						//     4.3 if false,
-
-						//read_block_from_list();
-						//hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
-						//hdr.ipv4.ttl = 53;
-						//standard_metadata.egress_spec = 1;
-						//standard_metadata.egress_port = 1;
-						//drop();
+						verify_block();
+						if(0 == meta.block_metadata.curr_header_hash[255:255 - HEADER_HASH_ZERO_COUNT]){
+							add_verify_success_count();
+						}else{
+							add_verify_failed_count();
+						}
+						// 4. determine verify_success_count bigger than half of nodes_count
+						//    4.1 if true, sync block and forward;
+						//    4.2 if false, drop;
+						verify_success_count.read(vs_count, 0);
+						nodes_count.read(n_count, 0);
+						if(vs_count > (n_count / 2)){
+							//sync_block();
+							hdr.udp.header_hash = 65533;
+							hdr.udp.header_hash[24:16] = standard_metadata.ingress_port;
+							standard_metadata.egress_spec = 1;
+							standard_metadata.egress_port = 1;
+							hdr.ipv4.ttl = 49;
+						}else{
+							drop();
+						}
 					}
+				}
+
+			}else if((hdr.udp.request_type == SYNC_REQUEST_L) || (hdr.udp.request_type == SYNC_REQUEST_U)){
+				if(standard_metadata.ingress_port == 1){
+					multicast();
+					add_nodes_count();
+				}else{
+					bit<32> n_count = 0;
+					nodes_count.read(n_count, 0);
+					if(standard_metadata.ingress_port > ((bit<9>)n_count * 2)){
+						drop();
+					}
+					hdr.udp.header_hash[31:0] = n_count;
+					hdr.udp.header_hash[40:32] = standard_metadata.ingress_port;
+					standard_metadata.egress_spec = 1;
+					standard_metadata.egress_port = 1;
+					hdr.ipv4.ttl = 47;
 				}
 			}else{
 				polling_packet();

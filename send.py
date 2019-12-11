@@ -42,6 +42,8 @@ def main():
             payload = 'i' + '\0' * 32 + '\0' * 69
         elif 'w' == request_string or 'write' == request_string:
             payload = 'w' + pre_header_hash + data_string
+        elif 's' == request_string or 'sync' == request_string:
+            payload = 's' + '\0' * 32 + '\0' * 69
         elif 'e' == request_string or 'exit' == request_string:
             payload = 'e' + '\0' * 32 + '\0' * 69
 
