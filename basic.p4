@@ -24,7 +24,7 @@ const bit<552>  data_string = 0x5468652054696d65732030332f4a616e2f32303039204368
 #define HEADER_HASH_ZERO_COUNT 4
 
 #define SINGLE_NODE_BLOCK_COUNT 1024
-#define NODE_SEQ(in_port) in_port >> 1    // max = 9, begin from 0
+#define NODE_SEQ(in_port) (in_port >> 1) - 1    // max = 9, begin from 0
 #define BLOCK_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count    // max = 10240
 #define BLOCK_HEADER_HASH_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count    // max = 10240
 
@@ -269,7 +269,6 @@ control MyIngress(inout headers hdr,
 	action get_node_seq_bl_bh_index(){
 		bit<32> b_count = 0;
 
-		hdr.udp.header_hash[64:56] = standard_metadata.ingress_port;
 		meta.block_metadata.node_seq[8:0] = NODE_SEQ(standard_metadata.ingress_port);
 		block_count.read(b_count, meta.block_metadata.node_seq);
 		meta.block_metadata.bl_index = BLOCK_LIST_INDEX(meta.block_metadata.node_seq, b_count);
@@ -359,7 +358,8 @@ control MyIngress(inout headers hdr,
 	}
 
 	action construct_new_block() {
-		meta.block_metadata.pre_header_hash = meta.block_metadata.curr_header_hash;
+		read_block_from_list();
+		meta.block_metadata.pre_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
 		meta.block_metadata.data = data_string;
 		meta.block_metadata.data_hash = FAKE_SHA256(meta.block_metadata.data);
 		get_timestamp();
@@ -505,15 +505,15 @@ control MyIngress(inout headers hdr,
 				if(standard_metadata.ingress_port == 1){
 					multicast();
 					init_nodes_count();
+					init_block_count();
 				}else{
 					bit<32> n_count = 0;
 					nodes_count.read(n_count, 0);
-					if(standard_metadata.ingress_port > (((bit<9>)n_count + 1) * 2)){
+					if(standard_metadata.ingress_port > (((bit<9>)n_count * 2 + 1)) || standard_metadata.ingress_port % 2 == 0){
 						drop();
 						return;
 					}
 					// set the block count to 0
-					init_block_count();
 					// create genesis block
 					construct_genesis_block();
 					read_block_from_list();
@@ -546,9 +546,12 @@ control MyIngress(inout headers hdr,
 					multicast();
 				}else{
 					// do proof of work job
+					hdr.ipv4.ttl = 47;
+					standard_metadata.egress_spec = 1;
+					standard_metadata.egress_port = 1;
 					bit<32> n_count = 0;
 					nodes_count.read(n_count, 0);
-					if(standard_metadata.ingress_port > (((bit<9>)n_count + 1) * 2)){
+					if(standard_metadata.ingress_port > (((bit<9>)n_count * 2 + 1)) || standard_metadata.ingress_port % 2 == 0){
 						drop();
 						return;
 					}
@@ -556,6 +559,7 @@ control MyIngress(inout headers hdr,
 					get_node_seq_bl_bh_index();
 					proof_of_work_done.read(b_count, 0);
 					b_count = b_count & (32w1 << (bit<8>)meta.block_metadata.node_seq);
+
 					if(b_count == 0){
 						construct_new_block();
 						if(0 != meta.block_metadata.curr_header_hash[255:255 - HEADER_HASH_ZERO_COUNT]){
@@ -602,6 +606,17 @@ control MyIngress(inout headers hdr,
 							done_list.read(b_index, d_index);
 							index = b_index % 1024;
 
+							hdr.udp.header_hash[31:0] = n_count;
+							hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
+							hdr.udp.header_hash[47:16] = b_count;
+							hdr.udp.header_hash[55:24] = b_count;
+							hdr.udp.header_hash[63:32] = meta.block_metadata.node_seq;
+							hdr.udp.header_hash[71:40] = vs_count;
+							hdr.udp.header_hash[79:48] = vf_count;
+							hdr.udp.header_hash[87:56] = index;
+							hdr.udp.header_hash[95:64] = b_index;
+							hdr.udp.header_hash[103:72] = d_index;
+
 							block_list.read(content, b_index - 1);
 
 							write_block_to_list_according_index(index, 0, content);
@@ -624,9 +639,9 @@ control MyIngress(inout headers hdr,
 							if(9 < n_count)
 								write_block_to_list_according_index(index, 9, content);
 
-							hdr.udp.header_hash = content[1127:872];
+							//hdr.udp.header_hash = content[1127:872];
 							hdr.ipv4.ttl = 41;
-							hdr.udp.header_hash[24:16] = standard_metadata.ingress_port;
+							//hdr.udp.header_hash[24:16] = standard_metadata.ingress_port;
 							standard_metadata.egress_spec = 1;
 							standard_metadata.egress_port = 1;
 						}else if(vf_count > (n_count >> 1)){
@@ -643,7 +658,7 @@ control MyIngress(inout headers hdr,
 				}else{
 					bit<32> n_count = 0;
 					nodes_count.read(n_count, 0);
-					if(standard_metadata.ingress_port > (((bit<9>)n_count + 1) * 2)){
+					if(standard_metadata.ingress_port > (((bit<9>)n_count * 2 + 1)) || standard_metadata.ingress_port % 2 == 0){
 						drop();
 					}else{
 						hdr.udp.header_hash[31:0] = n_count;
