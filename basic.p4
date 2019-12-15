@@ -11,22 +11,28 @@ const bit<552>  data_string = 0x5468652054696d65732030332f4a616e2f32303039204368
 *************************************************************************/
 
 
-// 'i', 'r','w','j' 
+
+// 'i', 'r','w','j', 'e', 'd' 
 #define INIT_REQUEST_L  0x69
 #define INIT_REQUEST_U  0x49
 #define READ_REQUEST_L  0x72
 #define READ_REQUEST_U  0x52
 #define WRITE_REQUEST_L 0x77
 #define WRITE_REQUEST_U 0x57
-#define JOIN_REQUEST_L  0x4A
-#define JOIN_REQUEST_U  0x6A
+#define JOIN_REQUEST_L  0x6A
+#define JOIN_REQUEST_U  0x4A
+#define EXIT_REQUEST_L  0x65
+#define EXIT_REQUEST_U  0x45
+#define DROP_REQUEST_L  0x64
+#define DROP_REQUEST_U  0x44
 
 #define HEADER_HASH_ZERO_COUNT 4
 
+#define MAX_NODES 10
 #define SINGLE_NODE_BLOCK_COUNT 1024
 #define NODE_SEQ(in_port) (in_port >> 1) - 1    // max = 9, begin from 0
-#define BLOCK_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count    // max = 10240
-#define BLOCK_HEADER_HASH_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count    // max = 10240
+#define BLOCK_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count    // max = MAX_NODES * SINGLE_NODE_BLOCK_COUNT
+#define BLOCK_HEADER_HASH_LIST_INDEX(node_seq, b_count) (node_seq * SINGLE_NODE_BLOCK_COUNT) + b_count    // max = MAX_NODES * SINGLE_NODE_BLOCK_COUNT
 
 #define FAKE_SHA256(input_data)    0x011111111111111111111111111111111111111111111111111111111111111F
 
@@ -140,16 +146,16 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 //register<bit<1>>(1) re_count;
 
 // max node num 10, each node has 1024 block
-register<bit<1128>>(10240)  block_list;                      // save block 
-register<bit<256>>(10240)   curr_block_header_hash_list;     // save header hash of block
-register<bit<32>>(10)       block_count;					 // indicate block count of each node
-register<bit<32>>(10)       done_list;						 // record the block index who has finished proof of work
-register<bit<32>>(1)		proof_of_work_done;				 // indicate node has finish proof of work
-register<bit<32>>(1)        done_count;						 // count of node done proof of work
-register<bit<32>>(1)		done_index;						 // index of done register, begin from zero. for verify
-register<bit<32>>(1)        verify_failed_count;			 // indicate verify failed node count
-register<bit<32>>(1)		verify_success_count;			 // indicate verify success node count 
-register<bit<32>>(1)        nodes_count;                     // total nodes count
+register<bit<1128>>(MAX_NODES * SINGLE_NODE_BLOCK_COUNT)  block_list;                      // save block 
+register<bit<256>>(MAX_NODES * SINGLE_NODE_BLOCK_COUNT)   curr_block_header_hash_list;     // save header hash of block
+register<bit<32>>(MAX_NODES)							  block_count;					   // indicate block count of each node
+register<bit<32>>(MAX_NODES)   							  done_list;					   // record the block index who has finished proof of work
+register<bit<32>>(1)									  proof_of_work_done;		   	   // indicate node has finish proof of work
+register<bit<32>>(1)        							  done_count;					   // count of node done proof of work
+register<bit<32>>(1)									  done_index;					   // index of done register, begin from zero. for verify
+register<bit<32>>(1)        							  verify_failed_count;			   // indicate verify failed node count
+register<bit<32>>(1)									  verify_success_count;			   // indicate verify success node count 
+register<bit<32>>(1)        							  nodes_count;                     // total nodes count
 
 
 /*************************************************************************
@@ -238,7 +244,7 @@ control MyIngress(inout headers hdr,
 	action change_request_type() {
 		bit<8> tmp;
 		tmp = hdr.udp.request_type;
-		tmp = tmp + 1;
+		tmp = DROP_REQUEST_L;
 		hdr.udp.request_type = tmp;
 	}
 
@@ -292,13 +298,13 @@ control MyIngress(inout headers hdr,
 		block_count.write(9, 0);
 	}
 
-	action add_block_count(bit<32> b_index){
-		bit<32> count = 0;
+	action add_block_count(bit<32> b_index, bit<32> count){
+		bit<32> tmp = 0;
 
 		//get_node_seq_bl_bh_index();
-		block_count.read(count, b_index);
-		count = count + 1;
-		block_count.write(b_index, count);
+		block_count.read(tmp, b_index);
+		tmp = tmp + count;
+		block_count.write(b_index, tmp);
 	}
 
 	action add_block_to_list(){
@@ -319,7 +325,7 @@ control MyIngress(inout headers hdr,
 
 		block_list.write(meta.block_metadata.bl_index, tmp);
 		curr_block_header_hash_list.write(meta.block_metadata.bh_index, meta.block_metadata.curr_header_hash);
-		add_block_count(meta.block_metadata.node_seq);
+		add_block_count(meta.block_metadata.node_seq, 1);
 		hdr.udp.header_hash = meta.block_metadata.curr_header_hash;
 	}
 
@@ -468,7 +474,6 @@ control MyIngress(inout headers hdr,
 
 	action write_block_to_list_according_index(bit<32> index, bit<32> count, bit<1128> content){
 		block_list.write(index + (1024 * count), content);
-		add_block_count(count);
 	}
 
 	action sync_block(){
@@ -496,13 +501,75 @@ control MyIngress(inout headers hdr,
 		block_list.write(index + (1024 * 9), tmp);
 	}
 
+	action copy_from_reg_to_reg_1(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		bit<1128> tmp = 0;
+		block_list.read(tmp, (index_f * 1024) + start_index - 1);
+		block_list.write((index_t * 1024) + start_index - 1, tmp);
+		add_block_count((index_t * 1024) + start_index - 1, 1);
+	}
+
+	action copy_from_reg_to_reg_2(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_1(index_f, index_t, start_index);
+		copy_from_reg_to_reg_1(index_f, index_t, start_index + 1);
+	}
+
+	action copy_from_reg_to_reg_4(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_2(index_f, index_t, start_index);
+		copy_from_reg_to_reg_2(index_f, index_t, start_index + 2);
+	}
+
+	action copy_from_reg_to_reg_8(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_4(index_f, index_t, start_index);
+		copy_from_reg_to_reg_4(index_f, index_t, start_index + 4);
+	}
+
+	action copy_from_reg_to_reg_16(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_8(index_f, index_t, start_index);
+		copy_from_reg_to_reg_8(index_f, index_t, start_index + 8);
+	}
+
+	action copy_from_reg_to_reg_32(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_16(index_f, index_t, start_index);
+		copy_from_reg_to_reg_16(index_f, index_t, start_index + 16);
+	}
+
+	action copy_from_reg_to_reg_64(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_32(index_f, index_t, start_index);
+		copy_from_reg_to_reg_32(index_f, index_t, start_index + 32);
+	}
+
+	action copy_from_reg_to_reg_128(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_64(index_f, index_t, start_index);
+		copy_from_reg_to_reg_64(index_f, index_t, start_index + 64);
+	}
+
+	action copy_from_reg_to_reg_256(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_128(index_f, index_t, start_index);
+		copy_from_reg_to_reg_128(index_f, index_t, start_index + 128);
+	}
+
+	action copy_from_reg_to_reg_512(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_256(index_f, index_t, start_index);
+		copy_from_reg_to_reg_256(index_f, index_t, start_index + 256);
+	}
+
+	action copy_from_reg_to_reg_1024(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_512(index_f, index_t, start_index);
+		copy_from_reg_to_reg_512(index_f, index_t, start_index + 512);
+	}
+
+	action copy_from_reg_to_reg_2048(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+		copy_from_reg_to_reg_1024(index_f, index_t, start_index);
+		copy_from_reg_to_reg_1024(index_f, index_t, start_index + 1024);
+	}
+
     apply {
 		@atomic{
 			// step 1: initialize the genesis block
 			// step 2: analysis the request type
 			// step 3: if the request type is init, init the env and create genesis block
 			if((hdr.udp.request_type == INIT_REQUEST_L) || (hdr.udp.request_type == INIT_REQUEST_U)){
-				if(standard_metadata.ingress_port == 1){
+				if(standard_metadata.ingress_port == 1 && standard_metadata.egress_port == 0){
 					multicast();
 					init_nodes_count();
 					init_block_count();
@@ -510,6 +577,8 @@ control MyIngress(inout headers hdr,
 					bit<32> n_count = 0;
 					nodes_count.read(n_count, 0);
 					if(standard_metadata.ingress_port > (((bit<9>)n_count * 2 + 1)) || standard_metadata.ingress_port % 2 == 0){
+						change_egress_port();
+						change_request_type();
 						drop();
 						return;
 					}
@@ -552,6 +621,8 @@ control MyIngress(inout headers hdr,
 					bit<32> n_count = 0;
 					nodes_count.read(n_count, 0);
 					if(standard_metadata.ingress_port > (((bit<9>)n_count * 2 + 1)) || standard_metadata.ingress_port % 2 == 0){
+						change_egress_port();
+						change_request_type();
 						drop();
 						return;
 					}
@@ -575,8 +646,11 @@ control MyIngress(inout headers hdr,
 						bit<32> vs_count = 0;
 						bit<32> vf_count = 0;
 						verify_success_count.read(vs_count, 0);
+						verify_failed_count.read(vf_count, 0);
 						nodes_count.read(n_count, 0);
-						if(vs_count > (n_count >> 1)){
+						if(vs_count > (n_count >> 1) || vf_count > (n_count >> 1)){
+							change_egress_port();
+							change_request_type();
 							drop();
 							return;
 						}
@@ -596,7 +670,6 @@ control MyIngress(inout headers hdr,
 						verify_failed_count.read(vf_count, 0);
 						nodes_count.read(n_count, 0);
 						if(vs_count > (n_count >> 1)){
-							//sync_block();
 							bit<32> index = 0;
 							bit<32> b_index = 0;
 							bit<1128> content = 0;
@@ -619,6 +692,7 @@ control MyIngress(inout headers hdr,
 
 							block_list.read(content, b_index - 1);
 
+							index = index - 1;
 							write_block_to_list_according_index(index, 0, content);
 							if(1 < n_count)
 								write_block_to_list_according_index(index, 1, content);
@@ -646,7 +720,11 @@ control MyIngress(inout headers hdr,
 							standard_metadata.egress_port = 1;
 						}else if(vf_count > (n_count >> 1)){
 							add_done_index();
+							standard_metadata.egress_spec = 1;
+							standard_metadata.egress_port = 1;
 						}else{
+							change_egress_port();
+							change_request_type();
 							drop();
 						}
 					}
@@ -659,18 +737,123 @@ control MyIngress(inout headers hdr,
 					bit<32> n_count = 0;
 					nodes_count.read(n_count, 0);
 					if(standard_metadata.ingress_port > (((bit<9>)n_count * 2 + 1)) || standard_metadata.ingress_port % 2 == 0){
+						change_egress_port();
+						change_request_type();
 						drop();
 					}else{
+						// sync_func
+						// step 1: get the max block count node's index
+						bit<32> max_block_count = 0;
+						bit<32> max_block_index = 0;
+						bit<32> tmp_count = 0;
+						block_count.read(tmp_count, 0);
+						max_block_count = tmp_count;
+						max_block_index = 0;
+						if(1 < n_count){
+							block_count.read(tmp_count, 1);
+							if(tmp_count > max_block_count){
+								max_block_count = tmp_count;
+								max_block_index = 1;
+							}
+						}else if(2 < n_count){
+							block_count.read(tmp_count, 2);
+							if(tmp_count > max_block_count){
+								max_block_count = tmp_count;
+								max_block_index = 2;
+							}
+						}else if(3 < n_count){
+							block_count.read(tmp_count, 3);
+							if(tmp_count > max_block_count){
+								max_block_count = tmp_count;
+								max_block_index = 3;
+							}
+						}else if(4 < n_count){
+							block_count.read(tmp_count, 4);
+							if(tmp_count > max_block_count){
+								max_block_count = tmp_count;
+								max_block_index = 4;
+							}
+						}else if(5 < n_count){
+							block_count.read(tmp_count, 5);
+							if(tmp_count > max_block_count){
+								max_block_count = tmp_count;
+								max_block_index = 5;
+							}
+						}else if(6 < n_count){
+							block_count.read(tmp_count, 6);
+							if(tmp_count > max_block_count){
+								max_block_count = tmp_count;
+								max_block_index = 6;
+							}
+						}else if(7 < n_count){
+							block_count.read(tmp_count, 7);
+							if(tmp_count > max_block_count){
+								max_block_count = tmp_count;
+								max_block_index = 7;
+							}
+						}else if(8 < n_count){
+							block_count.read(tmp_count, 8);
+							if(tmp_count > max_block_count){
+								max_block_count = tmp_count;
+								max_block_index = 8;
+							}
+						}else if(9 < n_count){
+							block_count.read(tmp_count, 9);
+							if(tmp_count > max_block_count){
+								max_block_count = tmp_count;
+								max_block_index = 9;
+							}
+						}
+						// step 2: sync block from max node index
+						bit<32> curr_node_index = n_count - 1;
+						if(max_block_count & 0x0001 != 0){
+							copy_from_reg_to_reg_1(max_block_index, curr_node_index, 1);
+						}
+						if(max_block_count & 0x0002 != 0){
+							copy_from_reg_to_reg_2(max_block_index, curr_node_index, 2);
+						}
+						if(max_block_count & 0x0004 != 0){
+							copy_from_reg_to_reg_4(max_block_index, curr_node_index, 4);
+						}
+						if(max_block_count & 0x0008 != 0){
+							copy_from_reg_to_reg_8(max_block_index, curr_node_index, 8);
+						}
+						if(max_block_count & 0x0010 != 0){
+							copy_from_reg_to_reg_16(max_block_index, curr_node_index, 16);
+						}
+						if(max_block_count & 0x0020 != 0){
+							copy_from_reg_to_reg_32(max_block_index, curr_node_index, 32);
+						}
+						if(max_block_count & 0x0040 != 0){
+							copy_from_reg_to_reg_64(max_block_index, curr_node_index, 64);
+						}
+						if(max_block_count & 0x0080 != 0){
+							copy_from_reg_to_reg_128(max_block_index, curr_node_index, 128);
+						}
+						if(max_block_count & 0x0100 != 0){
+							copy_from_reg_to_reg_256(max_block_index, curr_node_index, 256);
+						}
+						if(max_block_count & 0x0200 != 0){
+							copy_from_reg_to_reg_512(max_block_index, curr_node_index, 512);
+						}
+						if(max_block_count & 0x0400 != 0){
+							copy_from_reg_to_reg_1024(max_block_index, curr_node_index, 1024);
+						}
+						// step 3: return block count
 						hdr.udp.header_hash[31:0] = n_count;
-						hdr.udp.header_hash[40:32] = standard_metadata.ingress_port;
+						hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
+						hdr.udp.header_hash[47:16] = max_block_count;
+						hdr.udp.header_hash[55:24] = max_block_index;
 						standard_metadata.egress_spec = 1;
 						standard_metadata.egress_port = 1;
 						hdr.ipv4.ttl = 47;
 					}
 				}
-			}else{
+			}else if((hdr.udp.request_type == EXIT_REQUEST_L) || (hdr.udp.request_type == EXIT_REQUEST_U)){
 				//drop();
 				polling_packet();
+			}else{
+				drop();
 			}
 			// step 6: if the request type is sync, do sync job
 		}
