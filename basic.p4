@@ -462,7 +462,11 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.nonce = tmp[583:552];
 		//meta.block_metadata.data = tmp[551:0];
 
-		meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
+		if(d_index == 0){
+			meta.block_metadata.curr_header_hash = 0x111111111111111111111111111111111111111111111111111111111111111F;
+		}else{
+			meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
+		}
 
 		//if(0 == curr_header_hash[255:255 - HEADER_HASH_ZERO_COUNT]){
 		//	add_verify_success_count();
@@ -476,36 +480,11 @@ control MyIngress(inout headers hdr,
 		block_list.write(index + (1024 * count), content);
 	}
 
-	action sync_block(){
-		bit<32> index = 0;
-		bit<32> b_index = 0;
-		bit<1128> tmp = 0;
-		bit<32> n_count = 0;
-		bit<32> d_index = 0;
-
-		done_index.read(d_index, 0);
-		done_list.read(b_index, d_index);
-		index = b_index % 1024;
-		nodes_count.read(n_count, 0);
-
-		block_list.read(tmp, b_index - 1);
-		block_list.write(index + 0, tmp);
-		block_list.write(index + (1024 * 1), tmp);
-		block_list.write(index + (1024 * 2), tmp);
-		block_list.write(index + (1024 * 3), tmp);
-		block_list.write(index + (1024 * 4), tmp);
-		block_list.write(index + (1024 * 5), tmp);
-		block_list.write(index + (1024 * 6), tmp);
-		block_list.write(index + (1024 * 7), tmp);
-		block_list.write(index + (1024 * 8), tmp);
-		block_list.write(index + (1024 * 9), tmp);
-	}
-
 	action copy_from_reg_to_reg_1(bit<32> index_f, bit<32> index_t, bit<32> start_index){
 		bit<1128> tmp = 0;
 		block_list.read(tmp, (index_f * 1024) + start_index - 1);
 		block_list.write((index_t * 1024) + start_index - 1, tmp);
-		add_block_count((index_t * 1024) + start_index - 1, 1);
+		add_block_count(index_t, 1);
 	}
 
 	action copy_from_reg_to_reg_2(bit<32> index_f, bit<32> index_t, bit<32> start_index){
@@ -543,25 +522,20 @@ control MyIngress(inout headers hdr,
 		copy_from_reg_to_reg_64(index_f, index_t, start_index + 64);
 	}
 
-	action copy_from_reg_to_reg_256(bit<32> index_f, bit<32> index_t, bit<32> start_index){
-		copy_from_reg_to_reg_128(index_f, index_t, start_index);
-		copy_from_reg_to_reg_128(index_f, index_t, start_index + 128);
-	}
+	//action copy_from_reg_to_reg_256(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+	//	copy_from_reg_to_reg_128(index_f, index_t, start_index);
+	//	copy_from_reg_to_reg_128(index_f, index_t, start_index + 128);
+	//}
 
-	action copy_from_reg_to_reg_512(bit<32> index_f, bit<32> index_t, bit<32> start_index){
-		copy_from_reg_to_reg_256(index_f, index_t, start_index);
-		copy_from_reg_to_reg_256(index_f, index_t, start_index + 256);
-	}
+	//action copy_from_reg_to_reg_512(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+	//	copy_from_reg_to_reg_256(index_f, index_t, start_index);
+	//	copy_from_reg_to_reg_256(index_f, index_t, start_index + 256);
+	//}
 
-	action copy_from_reg_to_reg_1024(bit<32> index_f, bit<32> index_t, bit<32> start_index){
-		copy_from_reg_to_reg_512(index_f, index_t, start_index);
-		copy_from_reg_to_reg_512(index_f, index_t, start_index + 512);
-	}
-
-	action copy_from_reg_to_reg_2048(bit<32> index_f, bit<32> index_t, bit<32> start_index){
-		copy_from_reg_to_reg_1024(index_f, index_t, start_index);
-		copy_from_reg_to_reg_1024(index_f, index_t, start_index + 1024);
-	}
+	//action copy_from_reg_to_reg_1024(bit<32> index_f, bit<32> index_t, bit<32> start_index){
+	//	copy_from_reg_to_reg_512(index_f, index_t, start_index);
+	//	copy_from_reg_to_reg_512(index_f, index_t, start_index + 512);
+	//}
 
     apply {
 		@atomic{
@@ -736,7 +710,7 @@ control MyIngress(inout headers hdr,
 				}else{
 					bit<32> n_count = 0;
 					nodes_count.read(n_count, 0);
-					if(standard_metadata.ingress_port > (((bit<9>)n_count * 2 + 1)) || standard_metadata.ingress_port % 2 == 0){
+					if(standard_metadata.ingress_port != (((bit<9>)n_count * 2 + 1)) || standard_metadata.ingress_port % 2 == 0){
 						change_egress_port();
 						change_request_type();
 						drop();
@@ -831,19 +805,29 @@ control MyIngress(inout headers hdr,
 							copy_from_reg_to_reg_128(max_block_index, curr_node_index, 128);
 						}
 						if(max_block_count & 0x0100 != 0){
-							copy_from_reg_to_reg_256(max_block_index, curr_node_index, 256);
+							//copy_from_reg_to_reg_256(max_block_index, curr_node_index, 256);
+							copy_from_reg_to_reg_128(max_block_index, curr_node_index, 256);
+							copy_from_reg_to_reg_128(max_block_index, curr_node_index, 384);
 						}
 						if(max_block_count & 0x0200 != 0){
-							copy_from_reg_to_reg_512(max_block_index, curr_node_index, 512);
+							//copy_from_reg_to_reg_512(max_block_index, curr_node_index, 512);
+							copy_from_reg_to_reg_128(max_block_index, curr_node_index, 512);
+							copy_from_reg_to_reg_128(max_block_index, curr_node_index, 640);
+							copy_from_reg_to_reg_128(max_block_index, curr_node_index, 768);
+							copy_from_reg_to_reg_128(max_block_index, curr_node_index, 896);
 						}
-						if(max_block_count & 0x0400 != 0){
-							copy_from_reg_to_reg_1024(max_block_index, curr_node_index, 1024);
-						}
+						//if(max_block_count & 0x0400 != 0){
+						//	//copy_from_reg_to_reg_1024(max_block_index, curr_node_index, 1024);
+						//	copy_from_reg_to_reg_512(max_block_index, curr_node_index, 512);
+						//	copy_from_reg_to_reg_512(max_block_index, curr_node_index, 512);
+						//}
 						// step 3: return block count
+						block_count.read(tmp_count, n_count - 1);
 						hdr.udp.header_hash[31:0] = n_count;
 						hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
 						hdr.udp.header_hash[47:16] = max_block_count;
 						hdr.udp.header_hash[55:24] = max_block_index;
+						hdr.udp.header_hash[63:32] = tmp_count;
 						standard_metadata.egress_spec = 1;
 						standard_metadata.egress_port = 1;
 						hdr.ipv4.ttl = 47;
