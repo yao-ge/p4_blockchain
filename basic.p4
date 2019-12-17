@@ -374,6 +374,14 @@ control MyIngress(inout headers hdr,
 		add_block_to_list();
 	}
 
+	action add_done_index(){
+		bit<32> tmp = 0;
+		done_index.read(tmp, 0);
+		tmp = tmp + 1;
+		done_index.write(0, tmp);
+	}
+
+
 	action init_proof_of_work_register(){
 		done_list.write(0, 0);
 		done_list.write(1, 0);
@@ -397,13 +405,6 @@ control MyIngress(inout headers hdr,
 		done_count.read(tmp, 0);
 		tmp = tmp + 1;
 		done_count.write(0, tmp);
-	}
-
-	action add_done_index(){
-		bit<32> tmp = 0;
-		done_index.read(tmp, 0);
-		tmp = tmp + 1;
-		done_index.write(0, tmp);
 	}
 
 	action set_proof_of_work_register(){
@@ -547,6 +548,7 @@ control MyIngress(inout headers hdr,
 					multicast();
 					init_nodes_count();
 					init_block_count();
+					init_proof_of_work_register();
 				}else{
 					bit<32> n_count = 0;
 					nodes_count.read(n_count, 0);
@@ -585,7 +587,8 @@ control MyIngress(inout headers hdr,
 				// step 5.5: save the result and send header hash to user
 
 				if(standard_metadata.ingress_port == 1){
-					init_proof_of_work_register();
+					verify_failed_count.write(0, 0);
+					verify_success_count.write(0, 0);
 					multicast();
 				}else{
 					// do proof of work job
@@ -650,6 +653,13 @@ control MyIngress(inout headers hdr,
 							bit<32> d_index = 0;
 
 							done_index.read(d_index, 0);
+							if(d_index == n_count){
+								change_egress_port();
+								change_request_type();
+								drop();
+								return;
+							}
+
 							done_list.read(b_index, d_index);
 							index = b_index % 1024;
 
@@ -692,10 +702,13 @@ control MyIngress(inout headers hdr,
 							//hdr.udp.header_hash[24:16] = standard_metadata.ingress_port;
 							standard_metadata.egress_spec = 1;
 							standard_metadata.egress_port = 1;
+							init_proof_of_work_register();
 						}else if(vf_count > (n_count >> 1)){
 							add_done_index();
 							standard_metadata.egress_spec = 1;
 							standard_metadata.egress_port = 1;
+							standard_metadata.ingress_port = 1;
+							resubmit(standard_metadata);
 						}else{
 							change_egress_port();
 							change_request_type();
