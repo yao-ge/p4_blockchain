@@ -24,7 +24,7 @@ const bit<552>  data_string = 0x5468652054696d65732030332f4a616e2f32303039204368
 #define DROP_REQUEST_L  0x64
 #define DROP_REQUEST_U  0x44
 
-#define SHA256_SECTION 0
+#define SHA256_SECTION 1
 
 #define HEADER_HASH_ZERO_COUNT 4
 
@@ -366,12 +366,13 @@ control MyIngress(inout headers hdr,
 #if SHA256_SECTION
     action sha256_load(){
 
-        bit<16> count = meta.count - 1;
         bit<256> m0 = 0;
         bit<256> m1 = 0;
 
         if( (meta.pad == 0) && (meta.len > 0) ) {
-             m0 = hdr.data[0].m0; m1 = hdr.data[0].m1;
+             //m0 = hdr.data[0].m0; m1 = hdr.data[0].m1;
+			m0 = data_string[551:296];
+			m1 = data_string[295:40];
         }
 
 
@@ -408,7 +409,6 @@ control MyIngress(inout headers hdr,
             return;
         }
         if(meta.len >= 56 ){
-            
             meta.len = meta.len - 56;
             meta.length = 56;
             sha256_cal_mask();
@@ -424,7 +424,6 @@ control MyIngress(inout headers hdr,
         }
         
         if( meta.pad == 0) {
-
             sha256_cal_mask();
             meta.len = meta.len >> 2;
             if(meta.len == 0)meta.w0 = meta.w0 | meta.mask;
@@ -679,29 +678,51 @@ control MyIngress(inout headers hdr,
        meta.h7 = meta.h7 + meta.h;
     }
 
-    action sha256_output(){
-        hdr.length.len = 32;
-        hdr.data.pop_front(1);
-        hdr.data.push_front(1);
-        hdr.data[0].setValid();
-        hdr.data[0].m0[255:224] = meta.h0;
-        hdr.data[0].m0[223:192] = meta.h1;
-        hdr.data[0].m0[191:160] = meta.h2;
-        hdr.data[0].m0[159:128] = meta.h3;
-        hdr.data[0].m0[127:96] = meta.h4;
-        hdr.data[0].m0[95:64] = meta.h5;
-        hdr.data[0].m0[63:32] = meta.h6;
-        hdr.data[0].m0[31:0] = meta.h7;
-        hdr.data[0].m1 = 0;
-    }
-
     action forward() {
         /* TODO: fill out code in action body */
 		standard_metadata.egress_spec = 1;
-		hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-		hdr.ethernet.dstAddr = 0x000000000101;
-
     } 
+
+	//action calcu_sha256(){
+	//	if(meta.count == 0){
+	//		meta.all_len = 63;
+	//		meta.len = 63;
+	//		meta.max_count = (bit<16>)(meta.len >> 6) + 1;
+	//		if(((meta.len % 64) >= 56)){
+	//			meta.max_count = meta.max_count + 1;
+	//		}
+	//		sha256_first();
+	//	}
+
+	//	sha256_load();
+	//	sha256_padding();
+	//	sha256_extend1();
+	//	sha256_extend2();
+	//	//sha256_extend3();
+	//	//sha256_extend4();
+	//	//sha256_extend5();
+	//	//sha256_extend6();
+
+	//	sha256_init();
+	//	//sha256_main1();
+	//	//sha256_main2();
+	//	//sha256_main3();
+	//	//sha256_main4();
+	//	//sha256_main5();
+	//	//sha256_main6();
+	//	//sha256_main7();
+	//	//sha256_main8();
+	//	sha256_end();
+
+	//	hdr.udp.header_hash[255:224] = meta.h0;
+	//	hdr.udp.header_hash[223:192] = meta.h1;
+	//	hdr.udp.header_hash[191:160] = meta.h2;
+	//	hdr.udp.header_hash[159:128] = meta.h3;
+	//	hdr.udp.header_hash[127:96] = meta.h4;
+	//	hdr.udp.header_hash[95:64] = meta.h5;
+	//	hdr.udp.header_hash[63:32] = meta.h6;
+	//	hdr.udp.header_hash[31:0] = meta.h7;
+	//}
 #endif
 
 	action multicast(){
@@ -1065,7 +1086,6 @@ control MyIngress(inout headers hdr,
 
     apply {
 		@atomic{
-#if 1
 			// step 1: initialize the genesis block
 			// step 2: analysis the request type
 			// step 3: if the request type is init, init the env and create genesis block
@@ -1374,7 +1394,52 @@ control MyIngress(inout headers hdr,
 				drop();
 			}
 			// step 6: if the request type is sync, do sync job
-#endif
+
+
+			//if(standard_metadata.ingress_port == 1){
+			//	if(meta.count == 1){
+			//		meta.all_len = 63;
+			//		meta.len = 63;
+			//		meta.max_count = (bit<16>)(meta.len >> 6) + 1;
+			//		if(((meta.len % 64) >= 56)){
+			//			meta.max_count = meta.max_count + 1;
+			//		}
+			//		sha256_first();
+			//	}
+
+			//	sha256_load();
+			//	sha256_padding();
+			//	sha256_extend1();
+			//	sha256_extend2();
+			//	sha256_extend3();
+			//	sha256_extend4();
+			//	sha256_extend5();
+			//	sha256_extend6();
+
+			//	sha256_init();
+			//	sha256_main1();
+			//	sha256_main2();
+			//	sha256_main3();
+			//	sha256_main4();
+			//	sha256_main5();
+			//	sha256_main6();
+			//	sha256_main7();
+			//	sha256_main8();
+			//	sha256_end();
+
+			//	hdr.udp.header_hash[255:224] = meta.h0;
+			//	hdr.udp.header_hash[223:192] = meta.h1;
+			//	hdr.udp.header_hash[191:160] = meta.h2;
+			//	hdr.udp.header_hash[159:128] = meta.h3;
+			//	hdr.udp.header_hash[127:96] = meta.h4;
+			//	hdr.udp.header_hash[95:64] = meta.h5;
+			//	hdr.udp.header_hash[63:32] = meta.h6;
+			//	hdr.udp.header_hash[31:0] = meta.h7;
+			//	hdr.udp.data[511:256] = data_string[551:296];
+			//	hdr.udp.data[255:0] = data_string[295:40];
+			//	forward_to_dest_port(1);
+			//	hdr.ipv4.ttl = 41;
+			//}
 		}
     }
 }
