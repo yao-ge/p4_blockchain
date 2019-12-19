@@ -1089,6 +1089,14 @@ control MyIngress(inout headers hdr,
 			// step 1: initialize the genesis block
 			// step 2: analysis the request type
 			// step 3: if the request type is init, init the env and create genesis block
+
+			if(hdr.ethernet.dstAddr[7:0] != 0xff){
+				change_egress_port();
+				change_request_type();
+				drop();
+				return;
+			}
+
 			if((hdr.udp.request_type == INIT_REQUEST_L) || (hdr.udp.request_type == INIT_REQUEST_U)){
 				if(standard_metadata.ingress_port == 1 && standard_metadata.egress_port == 0){
 					multicast();

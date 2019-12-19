@@ -1,0 +1,358 @@
+pkg_info {
+  arch: "v1model"
+}
+actions {
+  preamble {
+    id: 16805608
+    name: "MyIngress.drop"
+    alias: "MyIngress.drop"
+  }
+}
+actions {
+  preamble {
+    id: 16839654
+    name: "MyIngress.multicast"
+    alias: "multicast"
+  }
+}
+actions {
+  preamble {
+    id: 16807546
+    name: "MyIngress.forward_to_dest_port"
+    alias: "forward_to_dest_port"
+  }
+}
+actions {
+  preamble {
+    id: 16828780
+    name: "MyIngress.change_egress_port"
+    alias: "change_egress_port"
+  }
+}
+actions {
+  preamble {
+    id: 16824508
+    name: "MyIngress.polling_packet"
+    alias: "polling_packet"
+  }
+}
+actions {
+  preamble {
+    id: 16791189
+    name: "MyIngress.change_request_type"
+    alias: "change_request_type"
+  }
+}
+actions {
+  preamble {
+    id: 16820632
+    name: "MyIngress.get_node_seq_bl_bh_index"
+    alias: "get_node_seq_bl_bh_index"
+  }
+}
+actions {
+  preamble {
+    id: 16783858
+    name: "MyIngress.init_block_count"
+    alias: "init_block_count"
+  }
+}
+actions {
+  preamble {
+    id: 16839226
+    name: "MyIngress.read_block_from_list"
+    alias: "read_block_from_list"
+  }
+}
+actions {
+  preamble {
+    id: 16807502
+    name: "MyIngress.construct_genesis_block"
+    alias: "construct_genesis_block"
+  }
+}
+actions {
+  preamble {
+    id: 16790199
+    name: "MyIngress.construct_new_block"
+    alias: "construct_new_block"
+  }
+}
+actions {
+  preamble {
+    id: 16833629
+    name: "MyIngress.add_done_index"
+    alias: "add_done_index"
+  }
+}
+actions {
+  preamble {
+    id: 16800689
+    name: "MyIngress.init_proof_of_work_register"
+    alias: "init_proof_of_work_register"
+  }
+}
+actions {
+  preamble {
+    id: 16777960
+    name: "MyIngress.set_proof_of_work_register"
+    alias: "set_proof_of_work_register"
+  }
+}
+actions {
+  preamble {
+    id: 16837306
+    name: "MyIngress.init_nodes_count"
+    alias: "init_nodes_count"
+  }
+}
+actions {
+  preamble {
+    id: 16840195
+    name: "MyIngress.add_nodes_count"
+    alias: "add_nodes_count"
+  }
+}
+actions {
+  preamble {
+    id: 16786847
+    name: "MyIngress.add_verify_success_count"
+    alias: "add_verify_success_count"
+  }
+}
+actions {
+  preamble {
+    id: 16837849
+    name: "MyIngress.add_verify_failed_count"
+    alias: "add_verify_failed_count"
+  }
+}
+actions {
+  preamble {
+    id: 16791389
+    name: "MyIngress.verify_block"
+    alias: "verify_block"
+  }
+}
+actions {
+  preamble {
+    id: 16785050
+    name: "MyIngress.write_block_to_list_according_index"
+    alias: "write_block_to_list_according_index"
+  }
+}
+actions {
+  preamble {
+    id: 16842375
+    name: "MyIngress.copy_from_reg_to_reg_1"
+    alias: "copy_from_reg_to_reg_1"
+  }
+}
+actions {
+  preamble {
+    id: 16782669
+    name: "MyIngress.copy_from_reg_to_reg_2"
+    alias: "copy_from_reg_to_reg_2"
+  }
+}
+actions {
+  preamble {
+    id: 16800774
+    name: "MyIngress.copy_from_reg_to_reg_4"
+    alias: "copy_from_reg_to_reg_4"
+  }
+}
+actions {
+  preamble {
+    id: 16784586
+    name: "MyIngress.copy_from_reg_to_reg_8"
+    alias: "copy_from_reg_to_reg_8"
+  }
+}
+actions {
+  preamble {
+    id: 16809335
+    name: "MyIngress.copy_from_reg_to_reg_16"
+    alias: "copy_from_reg_to_reg_16"
+  }
+}
+actions {
+  preamble {
+    id: 16790386
+    name: "MyIngress.copy_from_reg_to_reg_32"
+    alias: "copy_from_reg_to_reg_32"
+  }
+}
+actions {
+  preamble {
+    id: 16799619
+    name: "MyIngress.copy_from_reg_to_reg_64"
+    alias: "copy_from_reg_to_reg_64"
+  }
+}
+actions {
+  preamble {
+    id: 16802187
+    name: "MyIngress.copy_from_reg_to_reg_128"
+    alias: "copy_from_reg_to_reg_128"
+  }
+}
+actions {
+  preamble {
+    id: 16816924
+    name: "MyEgress.drop"
+    alias: "MyEgress.drop"
+  }
+}
+registers {
+  preamble {
+    id: 369134665
+    name: "block_list"
+    alias: "block_list"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 1128
+      }
+    }
+  }
+  size: 10240
+}
+registers {
+  preamble {
+    id: 369106454
+    name: "curr_block_header_hash_list"
+    alias: "curr_block_header_hash_list"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 256
+      }
+    }
+  }
+  size: 10240
+}
+registers {
+  preamble {
+    id: 369157804
+    name: "block_count"
+    alias: "block_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 10
+}
+registers {
+  preamble {
+    id: 369112718
+    name: "done_list"
+    alias: "done_list"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 10
+}
+registers {
+  preamble {
+    id: 369136829
+    name: "proof_of_work_done"
+    alias: "proof_of_work_done"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369154978
+    name: "done_count"
+    alias: "done_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369119300
+    name: "done_index"
+    alias: "done_index"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369145263
+    name: "verify_failed_count"
+    alias: "verify_failed_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369104390
+    name: "verify_success_count"
+    alias: "verify_success_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+registers {
+  preamble {
+    id: 369146685
+    name: "nodes_count"
+    alias: "nodes_count"
+  }
+  type_spec {
+    bitstring {
+      bit {
+        bitwidth: 32
+      }
+    }
+  }
+  size: 1
+}
+type_info {
+}
