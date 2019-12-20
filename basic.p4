@@ -24,6 +24,10 @@ const bit<552>  data_string = 0x5468652054696d65732030332f4a616e2f32303039204368
 #define DROP_REQUEST_L  0x64
 #define DROP_REQUEST_U  0x44
 
+#define HEADER_STR 0x01
+#define DATA_STR   0x02
+#define TEST_STR   0X03
+
 #define SHA256_SECTION 1
 
 #define HEADER_HASH_ZERO_COUNT 4
@@ -378,21 +382,35 @@ control MyIngress(inout headers hdr,
                             meta.b = meta.a; \
                             meta.a = meta.t1 + meta.t2;
 
-    action sha256_load(bit<32> control_lable){
+    action sha256_load(bit<32> control_lable, bit<32> str_type){
 
         bit<256> m0 = 0;
         bit<256> m1 = 0;
 
         if( (meta.pad == 0) && (meta.len > 0) ) {
-             //m0 = hdr.data[0].m0; m1 = hdr.data[0].m1;
 			if(control_lable == 0){
-				m0 = data_string[551:296];
-				m1 = data_string[295:40];
+				if(str_type == DATA_STR){
+					m0 = meta.block_metadata.data[551:296];
+					m1 = meta.block_metadata.data[295:40];
+				}else if(str_type == HEADER_STR){
+					m0 = meta.block_metadata.pre_header_hash;
+					m1 = meta.block_metadata.data_hash;
+				}else if(str_type == TEST_STR){
+					m0 = data_string[551:296];
+					m1 = data_string[295:40];
+				}
 			}else if(control_lable == 1){
-				m0[255:216] = data_string[39:0];
-				m1 = 0;
-				hdr.udp.data[511:256] = m0;
-				hdr.udp.data[255:0] = m1;
+				if(str_type == DATA_STR){
+					m0[255:216] = meta.block_metadata.data[39:0];
+				}else if(str_type == HEADER_STR){
+					m0[255:224] = meta.block_metadata.timestamp;
+					m0[223:192] = meta.block_metadata.nonce;
+				}else if(str_type == TEST_STR){
+					m0[255:216] = data_string[39:0];
+					m1 = 0;
+					hdr.udp.data[511:256] = data_string[551:296];
+					hdr.udp.data[255:0] = data_string[295:40];
+				}
 			}
         }
 
@@ -685,30 +703,87 @@ control MyIngress(inout headers hdr,
        meta.h7 = meta.h7 + meta.h;
     }
 
-#define REAL_SHA256(i)  sha256_load(i);\
-						sha256_padding(); \
-						sha256_extend1(); \
-						sha256_extend2(); \
-						sha256_extend3(); \
-						sha256_extend4(); \
-						sha256_extend5(); \
-						sha256_extend6(); \
-						sha256_init(); \
-						sha256_main1(); \
-						sha256_main2(); \
-						sha256_main3(); \
-						sha256_main4(); \
-						sha256_main5(); \
-						sha256_main6(); \
-						sha256_main7(); \
-						sha256_main8(); \
-						sha256_end();
+#define REAL_SHA256(i, j)   sha256_load(i, j);\
+							sha256_padding(); \
+							sha256_extend1(); \
+							sha256_extend2(); \
+							sha256_extend3(); \
+							sha256_extend4(); \
+							sha256_extend5(); \
+							sha256_extend6(); \
+							sha256_init(); \
+							sha256_main1(); \
+							sha256_main2(); \
+							sha256_main3(); \
+							sha256_main4(); \
+							sha256_main5(); \
+							sha256_main6(); \
+							sha256_main7(); \
+							sha256_main8(); \
+							sha256_end();
 
 
     action forward() {
         /* TODO: fill out code in action body */
 		standard_metadata.egress_spec = 1;
     } 
+
+	action get_sha256(bit<64> str_len, bit<32> str_type){
+		if(standard_metadata.ingress_port == 1 && standard_metadata.egress_port == 0){
+			meta.all_len = str_len;
+			meta.len = str_len;
+			meta.pad = 0;
+			meta.max_count = (bit<16>)(meta.len >> 6) + 1;
+			if(((meta.len % 64) >= 56)){
+				meta.max_count = meta.max_count + 1;
+			}
+			sha256_first();
+
+			if(0 < meta.max_count){
+				REAL_SHA256(0, str_type);
+			}
+
+			if(1 < meta.max_count){
+				REAL_SHA256(1, str_type);
+			}
+
+			if(str_type == DATA_STR){
+				meta.block_metadata.data_hash[255:224] = meta.h0;
+				meta.block_metadata.data_hash[223:192] = meta.h1;
+				meta.block_metadata.data_hash[191:160] = meta.h2;
+				meta.block_metadata.data_hash[159:128] = meta.h3;
+				meta.block_metadata.data_hash[127:96] = meta.h4;
+				meta.block_metadata.data_hash[95:64] = meta.h5;
+				meta.block_metadata.data_hash[63:32] = meta.h6;
+				meta.block_metadata.data_hash[31:0] = meta.h7;
+				hdr.udp.header_hash[255:224] = meta.h0;
+				hdr.udp.header_hash[223:192] = meta.h1;
+				hdr.udp.header_hash[191:160] = meta.h2;
+				hdr.udp.header_hash[159:128] = meta.h3;
+				hdr.udp.header_hash[127:96] = meta.h4;
+				hdr.udp.header_hash[95:64] = meta.h5;
+				hdr.udp.header_hash[63:32] = meta.h6;
+				hdr.udp.header_hash[31:0] = meta.h7;
+			}else if(str_type == HEADER_STR || str_type == TEST_STR){
+				meta.block_metadata.curr_header_hash[255:224] = meta.h0;
+				meta.block_metadata.curr_header_hash[223:192] = meta.h1;
+				meta.block_metadata.curr_header_hash[191:160] = meta.h2;
+				meta.block_metadata.curr_header_hash[159:128] = meta.h3;
+				meta.block_metadata.curr_header_hash[127:96] = meta.h4;
+				meta.block_metadata.curr_header_hash[95:64] = meta.h5;
+				meta.block_metadata.curr_header_hash[63:32] = meta.h6;
+				meta.block_metadata.curr_header_hash[31:0] = meta.h7;
+				hdr.udp.header_hash[255:224] = meta.h0;
+				hdr.udp.header_hash[223:192] = meta.h1;
+				hdr.udp.header_hash[191:160] = meta.h2;
+				hdr.udp.header_hash[159:128] = meta.h3;
+				hdr.udp.header_hash[127:96] = meta.h4;
+				hdr.udp.header_hash[95:64] = meta.h5;
+				hdr.udp.header_hash[63:32] = meta.h6;
+				hdr.udp.header_hash[31:0] = meta.h7;
+			}
+		}
+	}
 
 #endif
 
@@ -829,23 +904,28 @@ control MyIngress(inout headers hdr,
 	}
 
 	action construct_genesis_block(){
-		meta.block_metadata.pre_header_hash = 65535;
+		meta.block_metadata.pre_header_hash = 0;
 		meta.block_metadata.data = data_string;
-		meta.block_metadata.data_hash = FAKE_SHA256(meta.block_metadata.data);
+		//meta.block_metadata.data_hash = FAKE_SHA256(meta.block_metadata.data);
+		get_sha256(69, DATA_STR);
 		meta.block_metadata.timestamp = 0;
 		meta.block_metadata.nonce = 0;
-		meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
+		//meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
+		get_sha256(69, TEST_STR);
 		add_block_to_list();
 	}
 
 	action construct_new_block() {
 		read_block_from_list();
-		meta.block_metadata.pre_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
+		//meta.block_metadata.pre_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
+		get_sha256(72, HEADER_STR);
 		meta.block_metadata.data = data_string;
-		meta.block_metadata.data_hash = FAKE_SHA256(meta.block_metadata.data);
+		//meta.block_metadata.data_hash = FAKE_SHA256(meta.block_metadata.data);
+		get_sha256(69, DATA_STR);
 		get_timestamp();
 		get_random();
-		meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
+		//meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
+		get_sha256(72, HEADER_STR);
 		//add_block_to_list();
 	}
 
@@ -937,11 +1017,13 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.nonce = tmp[583:552];
 		//meta.block_metadata.data = tmp[551:0];
 
-		if(d_index == 0){
-			meta.block_metadata.curr_header_hash = 0x111111111111111111111111111111111111111111111111111111111111111F;
-		}else{
-			meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
-		}
+		get_sha256(72, HEADER_STR);
+
+		//if(d_index == 0){
+		//	meta.block_metadata.curr_header_hash = 0x111111111111111111111111111111111111111111111111111111111111111F;
+		//}else{
+		//	meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
+		//}
 	}
 
 	action write_block_to_list_according_index(bit<32> index, bit<32> count, bit<1128> content){
@@ -990,56 +1072,18 @@ control MyIngress(inout headers hdr,
 		copy_from_reg_to_reg_64(index_f, index_t, start_index + 64);
 	}
 
-	action get_sha256(){
-		if(standard_metadata.ingress_port == 1 && standard_metadata.egress_port == 0){
-			meta.count = 1;
-			if(meta.count == 1){
-				meta.all_len = 69;
-				meta.len = 69;
-				meta.pad = 0;
-				meta.max_count = (bit<16>)(meta.len >> 6) + 1;
-				if(((meta.len % 64) >= 56)){
-					meta.max_count = meta.max_count + 1;
-				}
-				sha256_first();
-			}
 
-			if(0 < meta.max_count){
-				REAL_SHA256(0);
-			}
-
-			if(1 < meta.max_count){
-				REAL_SHA256(1);
-			}
-
-			hdr.udp.header_hash[255:224] = meta.h0;
-			hdr.udp.header_hash[223:192] = meta.h1;
-			hdr.udp.header_hash[191:160] = meta.h2;
-			hdr.udp.header_hash[159:128] = meta.h3;
-			hdr.udp.header_hash[127:96] = meta.h4;
-			hdr.udp.header_hash[95:64] = meta.h5;
-			hdr.udp.header_hash[63:32] = meta.h6;
-			hdr.udp.header_hash[31:0] = meta.h7;
-			//hdr.udp.data[511:256] = data_string[551:296];
-			//hdr.udp.data[255:0] = data_string[295:40];
-			forward_to_dest_port(1);
-			hdr.ipv4.ttl = 41;
-		}
-	}
-
-
-
-	table debug {
-		key = {
-			standard_metadata.ingress_port: exact;
-			standard_metadata.egress_port: exact;
-		}
-		actions = {
-			NoAction;
-		}
-		size = 1024;
-		default_action = NoAction();
-	}
+	//table debug {
+	//	key = {
+	//		standard_metadata.ingress_port: exact;
+	//		standard_metadata.egress_port: exact;
+	//	}
+	//	actions = {
+	//		NoAction;
+	//	}
+	//	size = 1024;
+	//	default_action = NoAction();
+	//}
 
     apply {
 		@atomic{
@@ -1054,7 +1098,7 @@ control MyIngress(inout headers hdr,
 				return;
 			}
 
-#if 1
+#if 0
 			if((hdr.udp.request_type == INIT_REQUEST_L) || (hdr.udp.request_type == INIT_REQUEST_U)){
 				if(standard_metadata.ingress_port == 1 && standard_metadata.egress_port == 0){
 					init_nodes_count();    // init 2 nodes
@@ -1360,50 +1404,9 @@ control MyIngress(inout headers hdr,
 				drop();
 			}
 			// step 6: if the request type is sync, do sync job
-
 #endif
-
-			//debug.apply();
-			//get_sha256();
-			//get_sha256();
-			//get_sha256();
-			//get_sha256();
-			//get_sha256();
-			//get_sha256();
-			//if(standard_metadata.ingress_port == 1 && standard_metadata.egress_port == 0){
-			//	meta.count = 1;
-			//	if(meta.count == 1){
-			//		meta.all_len = 69;
-			//		meta.len = 69;
-			//		meta.pad = 0;
-			//		meta.max_count = (bit<16>)(meta.len >> 6) + 1;
-			//		if(((meta.len % 64) >= 56)){
-			//			meta.max_count = meta.max_count + 1;
-			//		}
-			//		sha256_first();
-			//	}
-
-			//	if(0 < meta.max_count){
-			//		REAL_SHA256(0);
-			//	}
-
-			//	if(1 < meta.max_count){
-			//		REAL_SHA256(1);
-			//	}
-
-			//	hdr.udp.header_hash[255:224] = meta.h0;
-			//	hdr.udp.header_hash[223:192] = meta.h1;
-			//	hdr.udp.header_hash[191:160] = meta.h2;
-			//	hdr.udp.header_hash[159:128] = meta.h3;
-			//	hdr.udp.header_hash[127:96] = meta.h4;
-			//	hdr.udp.header_hash[95:64] = meta.h5;
-			//	hdr.udp.header_hash[63:32] = meta.h6;
-			//	hdr.udp.header_hash[31:0] = meta.h7;
-			//	//hdr.udp.data[511:256] = data_string[551:296];
-			//	//hdr.udp.data[255:0] = data_string[295:40];
-			//	forward_to_dest_port(1);
-			//	hdr.ipv4.ttl = 41;
-			//}
+			get_sha256(69, TEST_STR);
+			hdr.ipv4.ttl = 41;
 		}
     }
 }
