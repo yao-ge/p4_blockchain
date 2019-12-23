@@ -367,6 +367,11 @@ control MyIngress(inout headers hdr,
         mark_to_drop(standard_metadata);
     }
 
+	action multicast(){
+		standard_metadata.mcast_grp = 1;
+	}
+
+
 #if SHA256_SECTION
 #define extend(i,j,k,l,m) meta.w##k = meta.w##l + G0(meta.w##i) + meta.w##m + G1(meta.w##j)
 #define main_operation(i)   meta.maj = (meta.a & meta.b) ^ (meta.a & meta.c) ^ (meta.b & meta.c); \
@@ -693,14 +698,14 @@ control MyIngress(inout headers hdr,
     }
 
     action sha256_end(){
-       meta.h0 = meta.h0 + meta.a;
-       meta.h1 = meta.h1 + meta.b;
-       meta.h2 = meta.h2 + meta.c;
-       meta.h3 = meta.h3 + meta.d;
-       meta.h4 = meta.h4 + meta.e;
-       meta.h5 = meta.h5 + meta.f;
-       meta.h6 = meta.h6 + meta.g;
-       meta.h7 = meta.h7 + meta.h;
+        meta.h0 = meta.h0 + meta.a;
+        meta.h1 = meta.h1 + meta.b;
+        meta.h2 = meta.h2 + meta.c;
+        meta.h3 = meta.h3 + meta.d;
+        meta.h4 = meta.h4 + meta.e;
+        meta.h5 = meta.h5 + meta.f;
+        meta.h6 = meta.h6 + meta.g;
+        meta.h7 = meta.h7 + meta.h;
     }
 
 #define REAL_SHA256(i, j)   sha256_load(i, j);\
@@ -729,67 +734,42 @@ control MyIngress(inout headers hdr,
     } 
 
 	action get_sha256(bit<64> str_len, bit<32> str_type){
-		if(standard_metadata.ingress_port == 1 && standard_metadata.egress_port == 0){
-			meta.all_len = str_len;
-			meta.len = str_len;
-			meta.pad = 0;
-			meta.max_count = (bit<16>)(meta.len >> 6) + 1;
-			if(((meta.len % 64) >= 56)){
-				meta.max_count = meta.max_count + 1;
-			}
-			sha256_first();
-
-			if(0 < meta.max_count){
-				REAL_SHA256(0, str_type);
-			}
-
-			if(1 < meta.max_count){
-				REAL_SHA256(1, str_type);
-			}
-
-			if(str_type == DATA_STR){
-				meta.block_metadata.data_hash[255:224] = meta.h0;
-				meta.block_metadata.data_hash[223:192] = meta.h1;
-				meta.block_metadata.data_hash[191:160] = meta.h2;
-				meta.block_metadata.data_hash[159:128] = meta.h3;
-				meta.block_metadata.data_hash[127:96] = meta.h4;
-				meta.block_metadata.data_hash[95:64] = meta.h5;
-				meta.block_metadata.data_hash[63:32] = meta.h6;
-				meta.block_metadata.data_hash[31:0] = meta.h7;
-				hdr.udp.header_hash[255:224] = meta.h0;
-				hdr.udp.header_hash[223:192] = meta.h1;
-				hdr.udp.header_hash[191:160] = meta.h2;
-				hdr.udp.header_hash[159:128] = meta.h3;
-				hdr.udp.header_hash[127:96] = meta.h4;
-				hdr.udp.header_hash[95:64] = meta.h5;
-				hdr.udp.header_hash[63:32] = meta.h6;
-				hdr.udp.header_hash[31:0] = meta.h7;
-			}else if(str_type == HEADER_STR || str_type == TEST_STR){
-				meta.block_metadata.curr_header_hash[255:224] = meta.h0;
-				meta.block_metadata.curr_header_hash[223:192] = meta.h1;
-				meta.block_metadata.curr_header_hash[191:160] = meta.h2;
-				meta.block_metadata.curr_header_hash[159:128] = meta.h3;
-				meta.block_metadata.curr_header_hash[127:96] = meta.h4;
-				meta.block_metadata.curr_header_hash[95:64] = meta.h5;
-				meta.block_metadata.curr_header_hash[63:32] = meta.h6;
-				meta.block_metadata.curr_header_hash[31:0] = meta.h7;
-				hdr.udp.header_hash[255:224] = meta.h0;
-				hdr.udp.header_hash[223:192] = meta.h1;
-				hdr.udp.header_hash[191:160] = meta.h2;
-				hdr.udp.header_hash[159:128] = meta.h3;
-				hdr.udp.header_hash[127:96] = meta.h4;
-				hdr.udp.header_hash[95:64] = meta.h5;
-				hdr.udp.header_hash[63:32] = meta.h6;
-				hdr.udp.header_hash[31:0] = meta.h7;
-			}
+		bit<256> tmp = 0;
+		meta.all_len = str_len;
+		meta.len = str_len;
+		meta.pad = 0;
+		meta.max_count = (bit<16>)(meta.len >> 6) + 1;
+		if(((meta.len % 64) >= 56)){
+			meta.max_count = meta.max_count + 1;
 		}
+		sha256_first();
+
+		if(0 < meta.max_count){
+			REAL_SHA256(0, str_type);
+		}
+
+		if(1 < meta.max_count){
+			REAL_SHA256(1, str_type);
+		}
+
+		tmp[255:224] = meta.h0;
+		tmp[223:192] = meta.h1;
+		tmp[191:160] = meta.h2;
+		tmp[159:128] = meta.h3;
+		tmp[127:96] = meta.h4;
+		tmp[95:64] = meta.h5;
+		tmp[63:32] = meta.h6;
+		tmp[31:0] = meta.h7;
+
+		if(str_type == 0x02){
+			meta.block_metadata.data_hash = tmp;
+		}else if(str_type == 0x01 || str_type == 0x03){
+			meta.block_metadata.curr_header_hash = tmp;
+		}
+		
 	}
 
 #endif
-
-	action multicast(){
-		standard_metadata.mcast_grp = 1;
-	}
 
 	action forward_to_dest_port(bit<9> dst_port){
 		standard_metadata.egress_port = dst_port;
@@ -798,6 +778,7 @@ control MyIngress(inout headers hdr,
 
 	action change_egress_port(){
 		hdr.ipv4.ttl = hdr.ipv4.ttl - (bit<8>)standard_metadata.ingress_port;
+		hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
 		forward_to_dest_port(1);
 	}
 
@@ -911,7 +892,7 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.timestamp = 0;
 		meta.block_metadata.nonce = 0;
 		//meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
-		get_sha256(69, TEST_STR);
+		get_sha256(72, HEADER_STR);
 		add_block_to_list();
 	}
 
@@ -1098,7 +1079,7 @@ control MyIngress(inout headers hdr,
 				return;
 			}
 
-#if 0
+#if 1
 			if((hdr.udp.request_type == INIT_REQUEST_L) || (hdr.udp.request_type == INIT_REQUEST_U)){
 				if(standard_metadata.ingress_port == 1 && standard_metadata.egress_port == 0){
 					init_nodes_count();    // init 2 nodes
@@ -1118,6 +1099,7 @@ control MyIngress(inout headers hdr,
 					// create genesis block
 					construct_genesis_block();
 					read_block_from_list();
+					//hdr.udp.header_hash = meta.block_metadata.curr_header_hash;
 					// test
 					hdr.udp.header_hash[8:0] = standard_metadata.ingress_port;
 				}
@@ -1404,9 +1386,12 @@ control MyIngress(inout headers hdr,
 				drop();
 			}
 			// step 6: if the request type is sync, do sync job
-#endif
-			get_sha256(69, TEST_STR);
+#else
+			get_sha256(72, TEST_STR);
+			forward_to_dest_port(1);
+			hdr.udp.header_hash = meta.block_metadata.curr_header_hash;
 			hdr.ipv4.ttl = 41;
+#endif
 		}
     }
 }
@@ -1438,9 +1423,9 @@ control MyEgress(inout headers hdr,
 		//else if(standard_metadata.egress_port == 1 && standard_metadata.ingress_port != 1)
 		//	drop();
 		
-		//if(standard_metadata.ingress_port == standard_metadata.egress_port){
-		//	drop();
-		//}
+		if(standard_metadata.ingress_port == standard_metadata.egress_port){
+			drop();
+		}
 	}
 }
 
