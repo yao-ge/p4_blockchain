@@ -24,9 +24,10 @@ const bit<552>  data_string = 0x5468652054696d65732030332f4a616e2f32303039204368
 #define DROP_REQUEST_L  0x64
 #define DROP_REQUEST_U  0x44
 
-#define HEADER_STR 0x01
-#define DATA_STR   0x02
-#define TEST_STR   0X03
+#define PRE_HEADER_STR  0X00
+#define CURR_HEADER_STR	0x01
+#define DATA_STR		0x02
+#define TEST_STR		0X03
 
 #define SHA256_SECTION 1
 
@@ -397,7 +398,7 @@ control MyIngress(inout headers hdr,
 				if(str_type == DATA_STR){
 					m0 = meta.block_metadata.data[551:296];
 					m1 = meta.block_metadata.data[295:40];
-				}else if(str_type == HEADER_STR){
+				}else if(str_type == PRE_HEADER_STR || str_type == CURR_HEADER_STR){
 					m0 = meta.block_metadata.pre_header_hash;
 					m1 = meta.block_metadata.data_hash;
 				}else if(str_type == TEST_STR){
@@ -407,7 +408,7 @@ control MyIngress(inout headers hdr,
 			}else if(control_lable == 1){
 				if(str_type == DATA_STR){
 					m0[255:216] = meta.block_metadata.data[39:0];
-				}else if(str_type == HEADER_STR){
+				}else if(str_type == PRE_HEADER_STR || str_type == CURR_HEADER_STR){
 					m0[255:224] = meta.block_metadata.timestamp;
 					m0[223:192] = meta.block_metadata.nonce;
 				}else if(str_type == TEST_STR){
@@ -761,10 +762,12 @@ control MyIngress(inout headers hdr,
 		tmp[63:32] = meta.h6;
 		tmp[31:0] = meta.h7;
 
-		if(str_type == 0x02){
-			meta.block_metadata.data_hash = tmp;
-		}else if(str_type == 0x01 || str_type == 0x03){
+		if(str_type == PRE_HEADER_STR){
+			meta.block_metadata.pre_header_hash = tmp;
+		}else if(str_type == CURR_HEADER_STR){
 			meta.block_metadata.curr_header_hash = tmp;
+		}else if(str_type == DATA_STR){
+			meta.block_metadata.data_hash = tmp;
 		}
 		
 	}
@@ -892,21 +895,21 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.timestamp = 0;
 		meta.block_metadata.nonce = 0;
 		//meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
-		get_sha256(72, HEADER_STR);
+		get_sha256(72, CURR_HEADER_STR);
 		add_block_to_list();
 	}
 
 	action construct_new_block() {
 		read_block_from_list();
 		//meta.block_metadata.pre_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
-		get_sha256(72, HEADER_STR);
+		get_sha256(72, PRE_HEADER_STR);
 		meta.block_metadata.data = data_string;
 		//meta.block_metadata.data_hash = FAKE_SHA256(meta.block_metadata.data);
 		get_sha256(69, DATA_STR);
 		get_timestamp();
 		get_random();
 		//meta.block_metadata.curr_header_hash = FAKE_SHA256(meta.block_metadata.pre_header_hash+meta.block_metadata.data_hash+meta.block_metadata.timestamp+meta.block_metadata.nonce);
-		get_sha256(72, HEADER_STR);
+		get_sha256(72, CURR_HEADER_STR);
 		//add_block_to_list();
 	}
 
@@ -998,7 +1001,7 @@ control MyIngress(inout headers hdr,
 		meta.block_metadata.nonce = tmp[583:552];
 		//meta.block_metadata.data = tmp[551:0];
 
-		get_sha256(72, HEADER_STR);
+		get_sha256(72, CURR_HEADER_STR);
 
 		//if(d_index == 0){
 		//	meta.block_metadata.curr_header_hash = 0x111111111111111111111111111111111111111111111111111111111111111F;
@@ -1126,6 +1129,7 @@ control MyIngress(inout headers hdr,
 				if(standard_metadata.ingress_port == 1){
 					verify_failed_count.write(0, 0);
 					verify_success_count.write(0, 0);
+					init_proof_of_work_register();
 					multicast();
 				}else{
 					// do proof of work job
@@ -1190,7 +1194,7 @@ control MyIngress(inout headers hdr,
 							bit<32> d_index = 0;
 
 							verify_index.read(d_index, 0);
-							if(d_index == n_count){
+							if(d_index >= n_count){
 								change_egress_port();
 								change_request_type();
 								drop();
@@ -1238,7 +1242,6 @@ control MyIngress(inout headers hdr,
 							hdr.ipv4.ttl = 41;
 							//hdr.udp.header_hash[24:16] = standard_metadata.ingress_port;
 							forward_to_dest_port(1);
-							init_proof_of_work_register();
 						}else if(vf_count >= n_count){
 							add_verify_index();
 							forward_to_dest_port(1);
