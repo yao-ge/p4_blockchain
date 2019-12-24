@@ -9,7 +9,7 @@ from scapy.all import sendp, send, get_if_list, get_if_hwaddr
 from scapy.all import Packet, hexdump
 from scapy.all import Ether, IP, UDP, TCP
 
-pre_header_hash = '\0' * 32
+blank_string = '\0' * (1 + 4 + 32 + 32 + 32 + 4 + 4 + 69)
 data_string = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks"
 
 def get_if():
@@ -37,20 +37,20 @@ def main():
     while True:
         request_string = raw_input("\n\033[31mread[r]/\033[32mwrite[w]/\033[33minit[i]/\033[35mjoin[j]/\033[36mexit[e]\n\033[37mrequest:")
         if 'r' == request_string or 'read' == request_string:
-            payload = 'r' + '\0' * 32 + '\0' * 69
+            payload = 'r' + blank_string
         elif 'i' == request_string or 'init' == request_string:
-            payload = 'i' + '\0' * 32 + '\0' * 69
+            payload = 'i' + blank_string
         elif 'w' == request_string or 'write' == request_string:
-            payload = 'w' + pre_header_hash + data_string
+            payload = 'w' + blank_string
         elif 'j' == request_string or 'join' == request_string:
-            payload = 'j' + '\0' * 32 + '\0' * 69
+            payload = 'j' + blank_string
         elif 'e' == request_string or 'exit' == request_string:
-            payload = 'e' + '\0' * 32 + '\0' * 69
+            payload = 'e' + blank_string
 
         pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
         pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / payload
-        pkt.show2()
-        hexdump(pkt)
+        #pkt.show2()
+        #hexdump(pkt)
         sendp(pkt, iface=iface, verbose=False)
 
         if 'e' == request_string or 'exit' == request_string:

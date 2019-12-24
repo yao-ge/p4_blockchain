@@ -23,30 +23,31 @@ def get_if():
         exit(1)
     return iface
 
-#class IPOption_MRI(IPOption):
-#    name = "MRI"
-#    option = 31
-#    fields_desc = [ _IPOption_HDR,
-#                    FieldLenField("length", None, fmt="B",
-#                                  length_of="swids",
-#                                  adjust=lambda pkt,l:l+4),
-#                    ShortField("count", 0),
-#                    FieldListField("swids",
-#                                   [],
-#                                   IntField("", 0),
-#                                   length_from=lambda pkt:pkt.count*4) ]
-
 def handle_pkt(pkt):
     #if TCP in pkt and pkt[TCP].dport == 1234:
     if UDP in pkt and pkt[UDP].dport == 1234 and pkt.ttl != 64:
         print("got a packet")
-        pkt.show2()
-        hexdump(pkt)
-        #timestamp = pkt.load
-        #print("timestamp:", timestamp[1:9])
-        #time_string = timestamp[5:9]
-        #time_string = ((struct.unpack(">i", time_string)))
-        #print(time_string)
+        #pkt.show2()
+        #hexdump(pkt)
+        data_load = pkt.load
+        request_type = data_load[:1]
+        nodes_count = data_load[1:2]
+        block_count = data_load[2:6]
+        pre_header_hash = data_load[6:38]
+        curr_header_hash = data_load[38:70]
+        data_hash = data_load[70:102]
+        timestamp = data_load[102:106]
+        nonce = data_load[106:110]
+        data_str = data_load[110:179]
+        print("request type:", request_type)
+        print("nodes count:", struct.unpack("B", nodes_count)[0])
+        print("block count:", struct.unpack(">I", block_count)[0])
+        print("pre header hash:", pre_header_hash.encode('hex'))
+        print("curr header hash:", curr_header_hash.encode('hex'))
+        print("data hash:", data_hash.encode('hex'))
+        print("timestamp:", struct.unpack(">I", timestamp)[0])
+        print("nonce:", struct.unpack(">I", nonce)[0])
+        print("\n")
         sys.stdout.flush()
         if pkt.load.startswith('e'):
             exit(0)

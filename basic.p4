@@ -72,7 +72,13 @@ header udp_t {
     bit<16>   length;
     bit<16>   checksum;
 	bit<8>    request_type;
-	bit<256>  header_hash;
+	bit<8>    nodes_count;
+	bit<32>   block_count;
+	bit<256>  pre_header_hash;
+	bit<256>  curr_header_hash;
+	bit<256>  data_hash;
+	bit<32>   timestamp;
+	bit<32>   nonce;
 	bit<552>  data;
 }
 
@@ -860,7 +866,6 @@ control MyIngress(inout headers hdr,
 		block_list.write(meta.block_metadata.bl_index, tmp);
 		curr_block_header_hash_list.write(meta.block_metadata.bh_index, meta.block_metadata.curr_header_hash);
 		add_block_count(meta.block_metadata.node_seq, 1);
-		hdr.udp.header_hash = meta.block_metadata.curr_header_hash;
 	}
 
 	action read_header_hash_from_list(){
@@ -868,8 +873,7 @@ control MyIngress(inout headers hdr,
 
 		get_node_seq_bl_bh_index();
 		curr_block_header_hash_list.read(tmp, meta.block_metadata.bh_index - 1);
-		hdr.udp.header_hash = tmp;
-		meta.block_metadata.pre_header_hash = tmp;
+		meta.block_metadata.curr_header_hash = tmp;
 	}
 
 	action read_block_from_list(){
@@ -1056,6 +1060,20 @@ control MyIngress(inout headers hdr,
 		copy_from_reg_to_reg_64(index_f, index_t, start_index + 64);
 	}
 
+	action output_to_hdr(){
+		bit<32> count = 0;
+		nodes_count.read(count, 0);
+		hdr.udp.nodes_count = (bit<8>)count;
+		get_node_seq_bl_bh_index();
+		block_count.read(count, meta.block_metadata.node_seq);
+		hdr.udp.block_count = count;
+		hdr.udp.pre_header_hash = meta.block_metadata.pre_header_hash;
+		hdr.udp.curr_header_hash = meta.block_metadata.curr_header_hash;
+		hdr.udp.data_hash = meta.block_metadata.data_hash;
+		hdr.udp.timestamp = meta.block_metadata.timestamp;
+		hdr.udp.nonce = meta.block_metadata.nonce;
+	}
+
 
 	//table debug {
 	//	key = {
@@ -1101,10 +1119,8 @@ control MyIngress(inout headers hdr,
 					// set the block count to 0
 					// create genesis block
 					construct_genesis_block();
+					output_to_hdr();
 					read_block_from_list();
-					//hdr.udp.header_hash = meta.block_metadata.curr_header_hash;
-					// test
-					hdr.udp.header_hash[8:0] = standard_metadata.ingress_port;
 				}
 				// broadcast, from port 1 to port 3 and 5, back to port 1
 				change_egress_port();
@@ -1117,6 +1133,7 @@ control MyIngress(inout headers hdr,
 					hdr.ipv4.ttl = 53;
 					read_block_from_list();
 					forward_to_dest_port(1);
+					output_to_hdr();
 				}
 			// step 5: if the request type is write, create a new block and return the new block header hash to user
 			}else if((hdr.udp.request_type == WRITE_REQUEST_L) || (hdr.udp.request_type == WRITE_REQUEST_U)){
@@ -1156,7 +1173,6 @@ control MyIngress(inout headers hdr,
 							hdr.ipv4.ttl = 51;
 							add_block_to_list();
 							set_proof_of_work_register();
-							hdr.udp.header_hash[24:16] = standard_metadata.ingress_port;
 							resubmit(standard_metadata);
 						}
 					}else{
@@ -1204,17 +1220,6 @@ control MyIngress(inout headers hdr,
 							done_list.read(b_index, d_index);
 							index = b_index % 1024;
 
-							hdr.udp.header_hash[31:0] = n_count;
-							hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
-							hdr.udp.header_hash[47:16] = b_count;
-							hdr.udp.header_hash[55:24] = b_count;
-							hdr.udp.header_hash[63:32] = meta.block_metadata.node_seq;
-							hdr.udp.header_hash[71:40] = vs_count;
-							hdr.udp.header_hash[79:48] = vf_count;
-							hdr.udp.header_hash[87:56] = index;
-							hdr.udp.header_hash[95:64] = b_index;
-							hdr.udp.header_hash[103:72] = d_index;
-
 							block_list.read(content, b_index - 1);
 
 							index = index - 1;
@@ -1238,9 +1243,8 @@ control MyIngress(inout headers hdr,
 							if(9 < n_count)
 								write_block_to_list_according_index(index, 9, content);
 
-							//hdr.udp.header_hash = content[1127:872];
 							hdr.ipv4.ttl = 41;
-							//hdr.udp.header_hash[24:16] = standard_metadata.ingress_port;
+							output_to_hdr();
 							forward_to_dest_port(1);
 						}else if(vf_count >= n_count){
 							add_verify_index();
@@ -1373,11 +1377,7 @@ control MyIngress(inout headers hdr,
 						}
 						// step 3: return block count
 						block_count.read(tmp_count, n_count - 1);
-						hdr.udp.header_hash[31:0] = n_count;
-						hdr.udp.header_hash[16:8] = standard_metadata.ingress_port;
-						hdr.udp.header_hash[47:16] = max_block_count;
-						hdr.udp.header_hash[55:24] = max_block_index;
-						hdr.udp.header_hash[63:32] = tmp_count;
+						output_to_hdr();
 						forward_to_dest_port(1);
 						hdr.ipv4.ttl = 47;
 					}
@@ -1392,7 +1392,7 @@ control MyIngress(inout headers hdr,
 #else
 			get_sha256(72, TEST_STR);
 			forward_to_dest_port(1);
-			hdr.udp.header_hash = meta.block_metadata.curr_header_hash;
+			hdr.udp.pre_header_hash = meta.block_metadata.curr_header_hash;
 			hdr.ipv4.ttl = 41;
 #endif
 		}
@@ -1419,13 +1419,6 @@ control MyEgress(inout headers hdr,
 	}
 
     apply { 
-		//if (standard_metadata.egress_port == 1 && standard_metadata.ingress_port == 1)
-		//	change_request_type();
-		//else if(standard_metadata.ingress_port == standard_metadata.egress_port)
-		//	drop();
-		//else if(standard_metadata.egress_port == 1 && standard_metadata.ingress_port != 1)
-		//	drop();
-		
 		if(standard_metadata.ingress_port == standard_metadata.egress_port){
 			drop();
 		}
@@ -1461,7 +1454,13 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
 	        hdr.udp.dport,
 	        hdr.udp.length,
 	        hdr.udp.request_type,
-	        hdr.udp.header_hash,
+			hdr.udp.nodes_count,
+			hdr.udp.block_count,
+	        hdr.udp.pre_header_hash,
+	        hdr.udp.curr_header_hash,
+			hdr.udp.data_hash,
+			hdr.udp.timestamp,
+			hdr.udp.nonce,
 	        hdr.udp.data
 	        },
 	        hdr.udp.checksum,
