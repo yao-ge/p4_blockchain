@@ -31,7 +31,7 @@ const bit<552>  data_string = 0x5468652054696d65732030332f4a616e2f32303039204368
 
 #define SHA256_SECTION 1
 
-#define HEADER_HASH_ZERO_COUNT 4
+#define HEADER_HASH_ZERO_COUNT 4 * 2
 
 #define MAX_NODES 10
 #define SINGLE_NODE_BLOCK_COUNT 1024
@@ -1161,6 +1161,19 @@ control MyIngress(inout headers hdr,
 						return;
 					}
 					bit<32> b_count = 0;
+
+					bit<32> vs_count = 0;
+					bit<32> vf_count = 0;
+					verify_success_count.read(vs_count, 0);
+					verify_failed_count.read(vf_count, 0);
+					nodes_count.read(n_count, 0);
+					if(vs_count > (n_count >> 1) || vf_count >= n_count){
+						change_egress_port();
+						change_request_type();
+						drop();
+						return;
+					}
+
 					get_node_seq_bl_bh_index();
 					proof_of_work_done.read(b_count, 0);
 					b_count = b_count & (32w1 << (bit<8>)meta.block_metadata.node_seq);
@@ -1177,17 +1190,6 @@ control MyIngress(inout headers hdr,
 						}
 					}else{
 						// 0. if verify_success_count is bigger than half of nodes count, drop;
-						bit<32> vs_count = 0;
-						bit<32> vf_count = 0;
-						verify_success_count.read(vs_count, 0);
-						verify_failed_count.read(vf_count, 0);
-						nodes_count.read(n_count, 0);
-						if(vs_count > (n_count >> 1) || vf_count >= n_count){
-							change_egress_port();
-							change_request_type();
-							drop();
-							return;
-						}
 						// 1. read block from register done_list according verify_index;
 						// 2. verify this block;
 						// 3. add verify_failed_count;
@@ -1224,24 +1226,55 @@ control MyIngress(inout headers hdr,
 
 							index = index - 1;
 							write_block_to_list_according_index(index, 0, content);
-							if(1 < n_count)
+
+							proof_of_work_done.read(b_count, 0);
+							if((b_count & (32w1 << 0)) == 0)
+								add_block_count(0, 1);
+							if(1 < n_count){
 								write_block_to_list_according_index(index, 1, content);
-							if(2 < n_count)
+								if((b_count & (32w1 << 1)) == 0)
+									add_block_count(1, 1);
+							}
+							if(2 < n_count){
 								write_block_to_list_according_index(index, 2, content);
-							if(3 < n_count)
+								if((b_count & (32w1 << 2)) == 0)
+									add_block_count(2, 1);
+							}
+							if(3 < n_count){
 								write_block_to_list_according_index(index, 3, content);
-							if(4 < n_count)
+								if((b_count & (32w1 << 3)) == 0)
+									add_block_count(3, 1);
+							}
+							if(4 < n_count){
 								write_block_to_list_according_index(index, 4, content);
-							if(5 < n_count)
+								if((b_count & (32w1 << 4)) == 0)
+									add_block_count(4, 1);
+							}
+							if(5 < n_count){
 								write_block_to_list_according_index(index, 5, content);
-							if(6 < n_count)
+								if((b_count & (32w1 << 5)) == 0)
+									add_block_count(5, 1);
+							}
+							if(6 < n_count){
 								write_block_to_list_according_index(index, 6, content);
-							if(7 < n_count)
+								if((b_count & (32w1 << 6)) == 0)
+									add_block_count(6, 1);
+							}
+							if(7 < n_count){
 								write_block_to_list_according_index(index, 7, content);
-							if(8 < n_count)
+								if((b_count & (32w1 << 7)) == 0)
+									add_block_count(7, 1);
+							}
+							if(8 < n_count){
 								write_block_to_list_according_index(index, 8, content);
-							if(9 < n_count)
+								if((b_count & (32w1 << 8)) == 0)
+									add_block_count(8, 1);
+							}
+							if(9 < n_count){
 								write_block_to_list_according_index(index, 9, content);
+								if((b_count & (32w1 << 9)) == 0)
+									add_block_count(9, 1);
+							}
 
 							hdr.ipv4.ttl = 41;
 							output_to_hdr();
